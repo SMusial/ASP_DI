@@ -6,37 +6,75 @@ import pandas as pd
 import numpy as np
 
 
+# Define consistent ASP ordering
+ASP_ORDER = ['ASP_Mount1', 'ASP_Mount2', 'ASP_Std1', 'ASP_Std2', 'ASP_Climb1', 'ASP_Climb2']
+
+def sort_asps(df: pd.DataFrame) -> pd.DataFrame:
+    """Sort ASPs in consistent order: Mountain, Standard, Climbing (1 before 2)."""
+    if 'asp_id' in df.columns:
+        # Create categorical with fixed order
+        df['asp_id'] = pd.Categorical(df['asp_id'], categories=ASP_ORDER, ordered=True)
+        return df.sort_values('asp_id').reset_index(drop=True)
+    return df
+
+
 def plot_asp_scores_with_uncertainty(scores_df: pd.DataFrame) -> go.Figure:
     """Plot ASP scores with uncertainty intervals."""
     fig = go.Figure()
     
-    scores_df = scores_df.sort_values('score', ascending=True)
+    scores_df = sort_asps(scores_df)
     
+    # Bars without error bars — clean look
     fig.add_trace(go.Bar(
         y=scores_df['asp_id'],
         x=scores_df['score'],
         orientation='h',
-        error_x=dict(
-            type='data',
-            array=scores_df['uncertainty'],
-            visible=True
-        ),
         marker=dict(
             color=scores_df['score'],
             colorscale='Viridis',
             showscale=True,
             colorbar=dict(title="Score")
         ),
-        text=scores_df['score'].round(3),
-        textposition='auto',
+        name='Score',
+        showlegend=False,
     ))
+    
+    # Error bars as separate diamond markers at the score value
+    fig.add_trace(go.Scatter(
+        y=scores_df['asp_id'],
+        x=scores_df['score'],
+        mode='markers',
+        marker=dict(size=8, color='red', symbol='diamond'),
+        error_x=dict(
+            type='data',
+            array=scores_df['uncertainty'],
+            visible=True,
+            color='red',
+            thickness=2,
+            width=6
+        ),
+        name='95% CI',
+        showlegend=True,
+    ))
+    
+    # Text annotations above the error bars
+    for i, row in scores_df.iterrows():
+        fig.add_annotation(
+            y=row['asp_id'],
+            x=row['score'] + row['uncertainty'] + 0.02,
+            text=f"{row['score']:.3f} ± {row['uncertainty']:.3f}",
+            showarrow=False,
+            font=dict(size=12),
+            xanchor='left',
+        )
     
     fig.update_layout(
         title="ASP Bayesian Scores with Uncertainty",
         xaxis_title="Score (0-1)",
+        xaxis=dict(range=[0, min(scores_df['score'].max() + scores_df['uncertainty'].max() + 0.15, 1.0)]),
         yaxis_title="ASP",
         height=400,
-        showlegend=False
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
     return fig
@@ -49,7 +87,7 @@ def plot_metric_distributions(scores_df: pd.DataFrame, metric: str) -> go.Figure
     mean_col = f'{metric}_mean'
     ci_col = f'{metric}_ci'
     
-    scores_df = scores_df.sort_values(mean_col, ascending=False)
+    scores_df = sort_asps(scores_df)
     
     ci_lower = [ci[0] for ci in scores_df[ci_col]]
     ci_upper = [ci[1] for ci in scores_df[ci_col]]
@@ -71,7 +109,7 @@ def plot_metric_distributions(scores_df: pd.DataFrame, metric: str) -> go.Figure
     metric_titles = {
         'success_rate': 'Success Rate',
         'response_time': 'Response Time (hours)',
-        'satisfaction': 'Customer Satisfaction (1-5)'
+        'satisfaction': 'Customer Satisfaction (0-10 NPS)'
     }
     
     fig.update_layout(
@@ -132,6 +170,7 @@ def plot_performance_comparison(historical_data: pd.DataFrame) -> go.Figure:
 def plot_data_sufficiency(historical_data: pd.DataFrame) -> go.Figure:
     """Visualize data availability per ASP to show uncertainty sources."""
     task_counts = historical_data.groupby('asp_id').size().reset_index(name='n_tasks')
+    task_counts = sort_asps(task_counts)
     
     fig = go.Figure(go.Bar(
         x=task_counts['asp_id'],
@@ -167,13 +206,17 @@ def plot_bayesian_vs_simple_average(scores_df: pd.DataFrame, historical_data: pd
     
     # Merge with Bayesian results
     comparison = scores_df[['asp_id', 'success_rate_mean', 'response_time_mean', 
-                            'satisfaction_mean', 'uncertainty']].merge(
+                            'satisfaction_mean', 'uncertainty', 
+                            'success_rate_ci', 'response_time_ci', 'satisfaction_ci']].merge(
         simple_avg, on='asp_id'
     )
     
+    # Sort in consistent order
+    comparison = sort_asps(comparison)
+    
     fig = make_subplots(
         rows=1, cols=3,
-        subplot_titles=('Success Rate', 'Response Time (hours)', 'Satisfaction (1-5)')
+        subplot_titles=('Success Rate', 'Response Time (hours)', 'Satisfaction (0-10 NPS)')
     )
     
     # Success Rate
@@ -182,10 +225,23 @@ def plot_bayesian_vs_simple_average(scores_df: pd.DataFrame, historical_data: pd
                name='Simple Average', marker_color='lightgray', showlegend=True),
         row=1, col=1
     )
+    # Add Bayesian with error bars
+    success_ci_lower = [ci[0] for ci in comparison['success_rate_ci']]
+    success_ci_upper = [ci[1] for ci in comparison['success_rate_ci']]
     fig.add_trace(
         go.Scatter(x=comparison['asp_id'], y=comparison['success_rate_mean'],
                    mode='markers', marker=dict(size=12, color='blue', symbol='diamond'),
-                   name='Bayesian Mean', showlegend=True),
+                   name='Bayesian Mean',
+                   error_y=dict(
+                       type='data',
+                       symmetric=False,
+                       array=[u - m for u, m in zip(success_ci_upper, comparison['success_rate_mean'])],
+                       arrayminus=[m - l for m, l in zip(comparison['success_rate_mean'], success_ci_lower)],
+                       color='blue',
+                       thickness=2,
+                       width=4
+                   ),
+                   showlegend=True),
         row=1, col=1
     )
     
@@ -195,10 +251,22 @@ def plot_bayesian_vs_simple_average(scores_df: pd.DataFrame, historical_data: pd
                name='Simple Average', marker_color='lightgray', showlegend=False),
         row=1, col=2
     )
+    response_ci_lower = [ci[0] for ci in comparison['response_time_ci']]
+    response_ci_upper = [ci[1] for ci in comparison['response_time_ci']]
     fig.add_trace(
         go.Scatter(x=comparison['asp_id'], y=comparison['response_time_mean'],
                    mode='markers', marker=dict(size=12, color='blue', symbol='diamond'),
-                   name='Bayesian Mean', showlegend=False),
+                   name='Bayesian Mean',
+                   error_y=dict(
+                       type='data',
+                       symmetric=False,
+                       array=[u - m for u, m in zip(response_ci_upper, comparison['response_time_mean'])],
+                       arrayminus=[m - l for m, l in zip(comparison['response_time_mean'], response_ci_lower)],
+                       color='blue',
+                       thickness=2,
+                       width=4
+                   ),
+                   showlegend=False),
         row=1, col=2
     )
     
@@ -208,19 +276,162 @@ def plot_bayesian_vs_simple_average(scores_df: pd.DataFrame, historical_data: pd
                name='Simple Average', marker_color='lightgray', showlegend=False),
         row=1, col=3
     )
+    satisfaction_ci_lower = [ci[0] for ci in comparison['satisfaction_ci']]
+    satisfaction_ci_upper = [ci[1] for ci in comparison['satisfaction_ci']]
     fig.add_trace(
         go.Scatter(x=comparison['asp_id'], y=comparison['satisfaction_mean'],
                    mode='markers', marker=dict(size=12, color='blue', symbol='diamond'),
-                   name='Bayesian Mean', showlegend=False),
+                   name='Bayesian Mean',
+                   error_y=dict(
+                       type='data',
+                       symmetric=False,
+                       array=[u - m for u, m in zip(satisfaction_ci_upper, comparison['satisfaction_mean'])],
+                       arrayminus=[m - l for m, l in zip(comparison['satisfaction_mean'], satisfaction_ci_lower)],
+                       color='blue',
+                       thickness=2,
+                       width=4
+                   ),
+                   showlegend=False),
         row=1, col=3
     )
     
     fig.update_layout(
         height=400,
-        title_text="Bayesian vs Simple Average Comparison",
+        title_text="Bayesian vs Simple Average Comparison (Blue error bars = Uncertainty)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
+    fig.update_yaxes(rangemode="tozero")
     
+    return fig
+
+
+def plot_prior_distributions() -> go.Figure:
+    """Plot the prior distributions used in the Bayesian model."""
+    import numpy as np
+    
+    fig = make_subplots(
+        rows=1, cols=3,
+        subplot_titles=(
+            'Success Rate Prior: Beta(α~Gamma(1,0.5), β~Gamma(1,0.5))',
+            'Response Time Prior: LogNormal(μ=ln(3), σ=1) — median≈3h',
+            'Satisfaction Prior: TruncNormal(μ=7, σ=3, 0-10)'
+        )
+    )
+    
+    # Success rate prior: sample from Beta with Gamma hyperpriors
+    np.random.seed(42)
+    alphas = np.random.gamma(1, 1/0.5, 2000)
+    betas = np.random.gamma(1, 1/0.5, 2000)
+    success_prior = np.random.beta(np.clip(alphas, 0.01, None), np.clip(betas, 0.01, None))
+    
+    x_s = np.linspace(0, 1, 200)
+    hist_s, edges_s = np.histogram(success_prior, bins=200, range=(0, 1), density=True)
+    fig.add_trace(
+        go.Scatter(x=x_s, y=hist_s, mode='lines', fill='tozeroy',
+                   line=dict(color='rgba(255,165,0,0.8)'), fillcolor='rgba(255,165,0,0.2)',
+                   name='Prior', showlegend=True),
+        row=1, col=1
+    )
+    
+    # Response time prior: LogNormal(ln(3), 1) — right-skewed, always positive
+    x_r = np.linspace(0.1, 25, 300)
+    from scipy.stats import lognorm
+    y_r = lognorm.pdf(x_r, s=1, scale=np.exp(np.log(3)))
+    fig.add_trace(
+        go.Scatter(x=x_r, y=y_r, mode='lines', fill='tozeroy',
+                   line=dict(color='rgba(255,165,0,0.8)'), fillcolor='rgba(255,165,0,0.2)',
+                   name='Prior', showlegend=False),
+        row=1, col=2
+    )
+    
+    # Satisfaction prior: Truncated Normal(7, 3) bounded 0-10
+    x_sat = np.linspace(0, 10, 200)
+    from scipy.stats import truncnorm
+    a, b = (0 - 7) / 3, (10 - 7) / 3  # standardized bounds
+    y_sat = truncnorm.pdf(x_sat, a, b, loc=7, scale=3)
+    fig.add_trace(
+        go.Scatter(x=x_sat, y=y_sat, mode='lines', fill='tozeroy',
+                   line=dict(color='rgba(255,165,0,0.8)'), fillcolor='rgba(255,165,0,0.2)',
+                   name='Prior', showlegend=False),
+        row=1, col=3
+    )
+    
+    fig.update_layout(
+        height=300,
+        title_text="Prior Distributions (our initial beliefs BEFORE seeing any data)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    fig.update_xaxes(title_text="Success Rate (probability)", row=1, col=1)
+    fig.update_xaxes(title_text="Response Time (hours)", row=1, col=2)
+    fig.update_xaxes(title_text="Satisfaction (0-10 NPS)", row=1, col=3)
+    fig.update_yaxes(title_text="Density", row=1, col=1)
+    
+    return fig
+
+
+def plot_prior_vs_posterior(scorer) -> go.Figure:
+    """Plot prior distributions overlaid with posterior distributions for all metrics."""
+    from scipy.stats import lognorm, truncnorm
+    
+    fig = make_subplots(rows=1, cols=3, subplot_titles=(
+        'Success Rate', 'Response Time (hours)', 'Satisfaction (0-10 NPS)'))
+    
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    
+    # --- PRIORS (orange dashed, same for all ASPs) ---
+    np.random.seed(42)
+    alphas = np.random.gamma(1, 1/0.5, 5000)
+    betas = np.random.gamma(1, 1/0.5, 5000)
+    success_prior = np.random.beta(np.clip(alphas, 0.01, None), np.clip(betas, 0.01, None))
+    x_s = np.linspace(0, 1, 200)
+    hist_s, _ = np.histogram(success_prior, bins=200, range=(0, 1), density=True)
+    fig.add_trace(go.Scatter(x=x_s, y=hist_s, mode='lines', fill='tozeroy',
+        line=dict(color='rgba(255,165,0,0.6)', width=2, dash='dash'),
+        fillcolor='rgba(255,165,0,0.1)', name='Prior', legendgroup='prior', showlegend=True), row=1, col=1)
+    
+    x_r = np.linspace(0.1, 25, 200)
+    y_r = lognorm.pdf(x_r, s=1, scale=3)
+    fig.add_trace(go.Scatter(x=x_r, y=y_r, mode='lines', fill='tozeroy',
+        line=dict(color='rgba(255,165,0,0.6)', width=2, dash='dash'),
+        fillcolor='rgba(255,165,0,0.1)', name='Prior', legendgroup='prior', showlegend=False), row=1, col=2)
+    
+    x_sat = np.linspace(0, 10, 200)
+    a, b = (0 - 7) / 3, (10 - 7) / 3
+    y_sat = truncnorm.pdf(x_sat, a, b, loc=7, scale=3)
+    fig.add_trace(go.Scatter(x=x_sat, y=y_sat, mode='lines', fill='tozeroy',
+        line=dict(color='rgba(255,165,0,0.6)', width=2, dash='dash'),
+        fillcolor='rgba(255,165,0,0.1)', name='Prior', legendgroup='prior', showlegend=False), row=1, col=3)
+    
+    # --- POSTERIORS (solid lines per ASP) ---
+    for i, asp_id in enumerate(ASP_ORDER):
+        if asp_id not in scorer.asp_ids:
+            continue
+        asp_pos = np.where(scorer.asp_ids == asp_id)[0][0]
+        color = colors[i % len(colors)]
+        
+        s_samples = scorer.trace.posterior['success_rate'].values[:, :, asp_pos].flatten()
+        h, e = np.histogram(s_samples, bins=50, density=True)
+        fig.add_trace(go.Scatter(x=(e[:-1]+e[1:])/2, y=h, mode='lines',
+            line=dict(color=color, width=2), name=asp_id,
+            legendgroup=asp_id, showlegend=True), row=1, col=1)
+        
+        log_mu = scorer.trace.posterior['response_log_mu'].values[:, :, asp_pos].flatten()
+        r_samples = np.exp(log_mu)
+        h, e = np.histogram(r_samples, bins=50, density=True)
+        fig.add_trace(go.Scatter(x=(e[:-1]+e[1:])/2, y=h, mode='lines',
+            line=dict(color=color, width=2), name=asp_id,
+            legendgroup=asp_id, showlegend=False), row=1, col=2)
+        
+        sat_samples = scorer.trace.posterior['satisfaction_mu'].values[:, :, asp_pos].flatten()
+        h, e = np.histogram(sat_samples, bins=50, density=True)
+        fig.add_trace(go.Scatter(x=(e[:-1]+e[1:])/2, y=h, mode='lines',
+            line=dict(color=color, width=2), name=asp_id,
+            legendgroup=asp_id, showlegend=False), row=1, col=3)
+    
+    fig.update_layout(height=400,
+        title_text="Prior (orange dashed) vs Posterior (solid) — How data updated our beliefs",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    fig.update_yaxes(rangemode="tozero")
     return fig
 
 
@@ -236,15 +447,14 @@ def plot_posterior_distributions(scorer, asp_id: str, metric: str = 'success_rat
         title = f"Success Rate Posterior Distribution - {asp_id}"
         xaxis_title = "Success Rate (probability)"
     elif metric == 'response_time':
-        response_shape = scorer.trace.posterior['response_shape'].values[:, :, asp_position].flatten()
-        response_rate = scorer.trace.posterior['response_rate'].values[:, :, asp_position].flatten()
-        samples = response_shape / response_rate
+        log_mu = scorer.trace.posterior['response_log_mu'].values[:, :, asp_position].flatten()
+        samples = np.exp(log_mu)
         title = f"Response Time Posterior Distribution - {asp_id}"
         xaxis_title = "Response Time (hours)"
     elif metric == 'satisfaction':
         samples = scorer.trace.posterior['satisfaction_mu'].values[:, :, asp_position].flatten()
         title = f"Satisfaction Posterior Distribution - {asp_id}"
-        xaxis_title = "Satisfaction (1-5 scale)"
+        xaxis_title = "Satisfaction (0-10 NPS)"
     else:
         return go.Figure()
     
