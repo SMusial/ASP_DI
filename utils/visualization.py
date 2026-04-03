@@ -75,7 +75,7 @@ def plot_asp_scores_with_uncertainty(scores_df: pd.DataFrame) -> go.Figure:
         xaxis=dict(range=[0, max_x]),
         yaxis_title="ASP",
         height=400,
-        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
     return fig
@@ -129,14 +129,19 @@ def plot_performance_comparison(historical_data: pd.DataFrame) -> go.Figure:
     summary = historical_data.groupby('asp_id').agg({
         'success': 'mean',
         'response_time_hours': 'mean',
-        'customer_satisfaction': 'mean',
         'cost': 'mean'
     }).reset_index()
+    # Compute NPS per ASP
+    def calc_nps(group):
+        p = (group['customer_satisfaction'] >= 9).sum()
+        d = (group['customer_satisfaction'] <= 6).sum()
+        return (p - d) / len(group) * 100
+    summary['nps'] = historical_data.groupby('asp_id').apply(calc_nps).values
     
     fig = make_subplots(
         rows=2, cols=2,
         subplot_titles=('Success Rate', 'Avg Response Time (hrs)', 
-                       'Customer Satisfaction', 'Avg Cost ($)')
+                       'NPS (%)', 'Avg Cost ($)')
     )
     
     fig.add_trace(
@@ -152,8 +157,8 @@ def plot_performance_comparison(historical_data: pd.DataFrame) -> go.Figure:
     )
     
     fig.add_trace(
-        go.Bar(x=summary['asp_id'], y=summary['customer_satisfaction'], 
-               name='Satisfaction', marker_color='lightgreen'),
+        go.Bar(x=summary['asp_id'], y=summary['nps'], 
+               name='NPS (%)', marker_color='lightgreen'),
         row=2, col=1
     )
     
@@ -306,7 +311,7 @@ def plot_bayesian_vs_simple_average(scores_df: pd.DataFrame, historical_data: pd
     fig.update_layout(
         height=400,
         title_text="Bayesian vs Simple Average Comparison (Blue error bars = Uncertainty)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     fig.update_yaxes(rangemode="tozero")
     
@@ -342,7 +347,7 @@ def plot_prior_distributions() -> go.Figure:
     )
     
     # Response time prior: LogNormal(ln(3), 1) — right-skewed, always positive
-    x_r = np.linspace(0.1, 20, 200)
+    x_r = np.linspace(0.1, 12, 200)
     from scipy.stats import lognorm
     y_r = lognorm.pdf(x_r, s=1, scale=np.exp(np.log(3)))
     fig.add_trace(
@@ -366,7 +371,7 @@ def plot_prior_distributions() -> go.Figure:
     fig.update_layout(
         height=300,
         title_text="Prior Distributions (our initial beliefs BEFORE seeing any data)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     fig.update_xaxes(title_text="Success Rate (probability)", row=1, col=1)
     fig.update_xaxes(title_text="Response Time (hours)", row=1, col=2)
@@ -396,7 +401,7 @@ def plot_prior_vs_posterior(scorer) -> go.Figure:
     x_s = np.linspace(0, 1, 200)
     hist_s, _ = np.histogram(success_prior, bins=200, range=(0, 1), density=True)
     
-    x_r = np.linspace(0.1, 20, 200)
+    x_r = np.linspace(0.1, 12, 200)
     y_r = lognorm.pdf(x_r, s=1, scale=2)
     
     x_sat = np.linspace(-100, 100, 200)
@@ -409,8 +414,8 @@ def plot_prior_vs_posterior(scorer) -> go.Figure:
     agg_s_x = (agg_s_e[:-1] + agg_s_e[1:]) / 2
     
     all_resp = np.concatenate([np.exp(scorer.trace.posterior['response_log_mu'].values[:, :, np.where(scorer.asp_ids == a)[0][0]].flatten()) for a in scorer.asp_ids])
-    all_resp = np.clip(all_resp, 0, 20)
-    agg_r_h, agg_r_e = np.histogram(all_resp, bins=80, range=(0, 20), density=True)
+    all_resp = np.clip(all_resp, 0, 12)
+    agg_r_h, agg_r_e = np.histogram(all_resp, bins=80, range=(0, 12), density=True)
     agg_r_x = (agg_r_e[:-1] + agg_r_e[1:]) / 2
     
     all_sat = np.concatenate([scorer.trace.posterior['nps_mu'].values[:, :, np.where(scorer.asp_ids == a)[0][0]].flatten() * 100 for a in scorer.asp_ids])
@@ -463,8 +468,8 @@ def plot_prior_vs_posterior(scorer) -> go.Figure:
         
         log_mu = scorer.trace.posterior['response_log_mu'].values[:, :, asp_pos].flatten()
         r_samples = np.exp(log_mu)
-        r_samples = np.clip(r_samples, 0, 20)
-        h, e = np.histogram(r_samples, bins=50, range=(0, 20), density=True)
+        r_samples = np.clip(r_samples, 0, 12)
+        h, e = np.histogram(r_samples, bins=50, range=(0, 12), density=True)
         fig.add_trace(go.Scatter(x=(e[:-1]+e[1:])/2, y=h, mode='lines',
             line=dict(color=color, width=2), name=asp_id,
             legendgroup=asp_id, showlegend=False), row=2, col=2)
@@ -477,9 +482,116 @@ def plot_prior_vs_posterior(scorer) -> go.Figure:
     
     fig.update_layout(height=700,
         title_text="Prior vs Posterior — How Data Updated Our Beliefs",
-        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5))
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     fig.update_yaxes(rangemode="tozero")
     return fig
+
+
+
+def plot_pos_comparison(samples_w, samples_r, name_w, name_r, pos_pct, x_range=None):
+    """Plot posterior score distributions for two ASPs with PoS annotation."""
+    fig = go.Figure()
+    h_w, e_w = np.histogram(samples_w, bins=60, density=True)
+    h_r, e_r = np.histogram(samples_r, bins=60, density=True)
+    fig.add_trace(go.Scatter(x=(e_w[:-1]+e_w[1:])/2, y=h_w, mode='lines', fill='tozeroy',
+        line=dict(color='#2ca02c', width=3), fillcolor='rgba(44,160,44,0.25)', name=f"\U0001f947 {name_w}"))
+    fig.add_trace(go.Scatter(x=(e_r[:-1]+e_r[1:])/2, y=h_r, mode='lines', fill='tozeroy',
+        line=dict(color='#d62728', width=3), fillcolor='rgba(214,39,40,0.25)', name=f"\U0001f948 {name_r}"))
+    if pos_pct >= 90:
+        verdict = "\U0001f7e2 Very High Confidence"
+    elif pos_pct >= 75:
+        verdict = "\U0001f7e1 Moderate Confidence"
+    elif pos_pct >= 60:
+        verdict = "\U0001f7e0 Low Confidence"
+    else:
+        verdict = "\U0001f534 Essentially a Coin Flip"
+    fig.update_layout(height=350, margin=dict(t=120, b=60),
+        title=dict(text=f"<b>Probability of Superiority (PoS)</b><br><span style='font-size:16px'>{name_w} beats {name_r} in <b>{pos_pct:.0f}%</b> of posterior samples — {verdict}</span>", font=dict(size=18)),
+        xaxis_title="Score", yaxis_title="Density",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    if x_range:
+        fig.update_xaxes(range=x_range)
+    fig.update_yaxes(rangemode="tozero")
+    return fig
+
+
+def plot_expected_loss(samples_w, samples_r, name_w, name_r, x_range=None):
+    """Plot Expected Loss: E(Loss|choose A) = mean(max(0, score_B - score_A))."""
+    loss_choose_w = np.maximum(0, samples_r - samples_w)
+    loss_choose_r = np.maximum(0, samples_w - samples_r)
+    el_w = loss_choose_w.mean()
+    el_r = loss_choose_r.mean()
+    fig = go.Figure()
+    
+    pos_w = loss_choose_w[loss_choose_w > 0]
+    pos_r = loss_choose_r[loss_choose_r > 0]
+    
+    if len(pos_w) > 2:
+        h_w, e_w = np.histogram(pos_w, bins=min(50, len(pos_w)), density=True)
+        fig.add_trace(go.Scatter(x=(e_w[:-1]+e_w[1:])/2, y=h_w, mode='lines', fill='tozeroy',
+            line=dict(color='#2ca02c', width=2), fillcolor='rgba(44,160,44,0.2)',
+            name=f"Loss if choosing {name_w} (E={el_w:.3f})"))
+    if len(pos_r) > 2:
+        h_r, e_r = np.histogram(pos_r, bins=min(50, len(pos_r)), density=True)
+        fig.add_trace(go.Scatter(x=(e_r[:-1]+e_r[1:])/2, y=h_r, mode='lines', fill='tozeroy',
+            line=dict(color='#d62728', width=2), fillcolor='rgba(214,39,40,0.2)',
+            name=f"Loss if choosing {name_r} (E={el_r:.3f})"))
+    
+    safer = name_w if el_w < el_r else name_r
+    ratio = max(el_w, el_r) / max(min(el_w, el_r), 0.001)
+    if el_w == 0 and el_r == 0:
+        subtitle = f"<span style='font-size:16px'>Both ASPs have zero expected loss — identical performance</span>"
+    elif el_w == 0:
+        subtitle = f"<span style='font-size:16px'>E(Loss|{name_w}) = 0.000 — {name_w} never loses to {name_r}</span>"
+    elif el_r == 0:
+        subtitle = f"<span style='font-size:16px'>E(Loss|{name_r}) = 0.000 — {name_r} never loses to {name_w}</span>"
+    else:
+        subtitle = (f"<span style='font-size:16px'>E(Loss|{name_w}) = {el_w:.3f} — E(Loss|{name_r}) = {el_r:.3f}</span><br>"
+            f"<span style='font-size:13px'>E = mean of max(0, opponent_score − your_score). "
+            f"\U0001f6e1\ufe0f Safer: <b>{safer}</b> ({ratio:.1f}× less risk)</span>")
+    
+    fig.update_layout(height=350, margin=dict(t=120, b=60),
+        title=dict(text=f"<b>Expected Loss (The \"Safety\" Metric)</b><br>{subtitle}", font=dict(size=18)),
+        xaxis_title="Score Loss (points)", yaxis_title="Density",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    if x_range:
+        fig.update_xaxes(range=[0, x_range[1] - x_range[0]])
+    fig.update_yaxes(rangemode="tozero")
+    return fig, el_w, el_r
+
+
+def plot_credible_interval(samples_w, samples_r, name_w, name_r, x_range=None):
+    """Plot 95% Credible Intervals for both ASPs side by side."""
+    ci_w = (np.percentile(samples_w, 2.5), np.percentile(samples_w, 97.5))
+    ci_r = (np.percentile(samples_r, 2.5), np.percentile(samples_r, 97.5))
+    mean_w, mean_r = samples_w.mean(), samples_r.mean()
+    overlap = ci_w[0] < ci_r[1] and ci_r[0] < ci_w[1]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=[ci_w[0], ci_w[1]], y=[name_w, name_w], mode='lines+markers',
+        line=dict(color='#2ca02c', width=6), marker=dict(size=12, symbol='line-ns', line_width=3),
+        name=f"\U0001f947 {name_w} [{ci_w[0]:.3f}, {ci_w[1]:.3f}]"))
+    fig.add_trace(go.Scatter(x=[mean_w], y=[name_w], mode='markers',
+        marker=dict(size=14, color='#2ca02c', symbol='diamond'), showlegend=False))
+    fig.add_trace(go.Scatter(x=[ci_r[0], ci_r[1]], y=[name_r, name_r], mode='lines+markers',
+        line=dict(color='#d62728', width=6), marker=dict(size=12, symbol='line-ns', line_width=3),
+        name=f"\U0001f948 {name_r} [{ci_r[0]:.3f}, {ci_r[1]:.3f}]"))
+    fig.add_trace(go.Scatter(x=[mean_r], y=[name_r], mode='markers',
+        marker=dict(size=14, color='#d62728', symbol='diamond'), showlegend=False))
+    if overlap:
+        ol_left = max(ci_w[0], ci_r[0])
+        ol_right = min(ci_w[1], ci_r[1])
+        fig.add_vrect(x0=ol_left, x1=ol_right, fillcolor="rgba(255,165,0,0.15)", line_width=0,
+            annotation_text="overlap", annotation_position="top")
+        verdict = f"\u26a0\ufe0f CIs overlap [{ol_left:.3f}, {ol_right:.3f}] \u2014 decision has uncertainty"
+    else:
+        verdict = f"\u2705 No CI overlap \u2014 {name_w} is clearly superior"
+    fig.update_layout(height=300, margin=dict(t=120, b=60),
+        title=dict(text=f"<b>95% Credible Intervals (The \"Range\" Proof)</b><br><span style='font-size:16px'>{verdict}</span>", font=dict(size=18)),
+        xaxis_title="Score",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    if x_range:
+        fig.update_xaxes(range=x_range)
+    return fig, ci_w, ci_r, overlap
 
 
 def plot_posterior_distributions(scorer, asp_id: str, metric: str = 'success_rate') -> go.Figure:

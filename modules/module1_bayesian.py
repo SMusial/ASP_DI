@@ -130,3 +130,15 @@ class BayesianASPScorer:
         
         df = pd.DataFrame(results)
         return df.sort_values('score', ascending=False).reset_index(drop=True)
+    
+    def get_score_samples(self, asp_id: str, weights: Dict[str, float] = None) -> np.ndarray:
+        """Return posterior score samples for an ASP (for PoS computation)."""
+        if weights is None:
+            weights = {'success_rate': 0.4, 'response_time': 0.3, 'satisfaction': 0.3}
+        asp_pos = np.where(self.asp_ids == asp_id)[0][0]
+        success = self.trace.posterior['success_rate'].values[:, :, asp_pos].flatten()
+        response = np.exp(self.trace.posterior['response_log_mu'].values[:, :, asp_pos].flatten())
+        nps = self.trace.posterior['nps_mu'].values[:, :, asp_pos].flatten() * 100
+        return (weights['success_rate'] * success +
+                weights['response_time'] * (1 / (1 + response / 10)) +
+                weights['satisfaction'] * (nps + 100) / 200)
