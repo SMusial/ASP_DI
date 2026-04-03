@@ -68,13 +68,14 @@ def plot_asp_scores_with_uncertainty(scores_df: pd.DataFrame) -> go.Figure:
             xanchor='left',
         )
     
+    max_x = max(row['score'] + row['uncertainty'] for _, row in scores_df.iterrows()) + 0.25
     fig.update_layout(
         title="ASP Bayesian Scores with Uncertainty",
         xaxis_title="Score (0-1)",
-        xaxis=dict(range=[0, min(scores_df['score'].max() + scores_df['uncertainty'].max() + 0.15, 1.0)]),
+        xaxis=dict(range=[0, max_x]),
         yaxis_title="ASP",
         height=400,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5)
     )
     
     return fig
@@ -109,7 +110,7 @@ def plot_metric_distributions(scores_df: pd.DataFrame, metric: str) -> go.Figure
     metric_titles = {
         'success_rate': 'Success Rate',
         'response_time': 'Response Time (hours)',
-        'satisfaction': 'Customer Satisfaction (0-10 NPS)'
+        'satisfaction': 'Customer NPS (%)'
     }
     
     fig.update_layout(
@@ -197,12 +198,19 @@ def plot_data_sufficiency(historical_data: pd.DataFrame) -> go.Figure:
 
 def plot_bayesian_vs_simple_average(scores_df: pd.DataFrame, historical_data: pd.DataFrame) -> go.Figure:
     """Compare Bayesian estimates with simple averages to show value."""
-    # Calculate simple averages
+    # Calculate simple averages + NPS
     simple_avg = historical_data.groupby('asp_id').agg({
         'success': 'mean',
         'response_time_hours': 'mean',
-        'customer_satisfaction': 'mean'
     }).reset_index()
+    # Compute simple NPS per ASP
+    def calc_nps(group):
+        promoters = (group['customer_satisfaction'] >= 9).sum()
+        detractors = (group['customer_satisfaction'] <= 6).sum()
+        return (promoters - detractors) / len(group) * 100
+    simple_nps = historical_data.groupby('asp_id').apply(calc_nps).reset_index()
+    simple_nps.columns = ['asp_id', 'nps']
+    simple_avg = simple_avg.merge(simple_nps, on='asp_id')
     
     # Merge with Bayesian results
     comparison = scores_df[['asp_id', 'success_rate_mean', 'response_time_mean', 
@@ -216,7 +224,7 @@ def plot_bayesian_vs_simple_average(scores_df: pd.DataFrame, historical_data: pd
     
     fig = make_subplots(
         rows=1, cols=3,
-        subplot_titles=('Success Rate', 'Response Time (hours)', 'Satisfaction (0-10 NPS)')
+        subplot_titles=('Success Rate', 'Response Time (hours)', 'NPS (%)')
     )
     
     # Success Rate
@@ -270,9 +278,9 @@ def plot_bayesian_vs_simple_average(scores_df: pd.DataFrame, historical_data: pd
         row=1, col=2
     )
     
-    # Satisfaction
+    # NPS
     fig.add_trace(
-        go.Bar(x=comparison['asp_id'], y=comparison['customer_satisfaction'],
+        go.Bar(x=comparison['asp_id'], y=comparison['nps'],
                name='Simple Average', marker_color='lightgray', showlegend=False),
         row=1, col=3
     )
@@ -298,7 +306,7 @@ def plot_bayesian_vs_simple_average(scores_df: pd.DataFrame, historical_data: pd
     fig.update_layout(
         height=400,
         title_text="Bayesian vs Simple Average Comparison (Blue error bars = Uncertainty)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5)
     )
     fig.update_yaxes(rangemode="tozero")
     
@@ -313,8 +321,8 @@ def plot_prior_distributions() -> go.Figure:
         rows=1, cols=3,
         subplot_titles=(
             'Success Rate Prior: Beta(α~Gamma(1,0.5), β~Gamma(1,0.5))',
-            'Response Time Prior: LogNormal(μ=ln(3), σ=1) — median≈3h',
-            'Satisfaction Prior: TruncNormal(μ=7, σ=3, 0-10)'
+            'Response Time Prior: LogNormal(μ=ln(2), σ=1) — median≈2h, max 12h',
+            'NPS Prior: Normal(μ=0%, σ=50%)'
         )
     )
     
@@ -334,7 +342,7 @@ def plot_prior_distributions() -> go.Figure:
     )
     
     # Response time prior: LogNormal(ln(3), 1) — right-skewed, always positive
-    x_r = np.linspace(0.1, 25, 300)
+    x_r = np.linspace(0.1, 20, 200)
     from scipy.stats import lognorm
     y_r = lognorm.pdf(x_r, s=1, scale=np.exp(np.log(3)))
     fig.add_trace(
@@ -344,11 +352,10 @@ def plot_prior_distributions() -> go.Figure:
         row=1, col=2
     )
     
-    # Satisfaction prior: Truncated Normal(7, 3) bounded 0-10
-    x_sat = np.linspace(0, 10, 200)
-    from scipy.stats import truncnorm
-    a, b = (0 - 7) / 3, (10 - 7) / 3  # standardized bounds
-    y_sat = truncnorm.pdf(x_sat, a, b, loc=7, scale=3)
+    # NPS prior: Normal(0, 50) in percentage
+    x_sat = np.linspace(-100, 100, 200)
+    from scipy.stats import norm
+    y_sat = norm.pdf(x_sat, loc=0, scale=50)
     fig.add_trace(
         go.Scatter(x=x_sat, y=y_sat, mode='lines', fill='tozeroy',
                    line=dict(color='rgba(255,165,0,0.8)'), fillcolor='rgba(255,165,0,0.2)',
@@ -359,50 +366,89 @@ def plot_prior_distributions() -> go.Figure:
     fig.update_layout(
         height=300,
         title_text="Prior Distributions (our initial beliefs BEFORE seeing any data)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5)
     )
     fig.update_xaxes(title_text="Success Rate (probability)", row=1, col=1)
     fig.update_xaxes(title_text="Response Time (hours)", row=1, col=2)
-    fig.update_xaxes(title_text="Satisfaction (0-10 NPS)", row=1, col=3)
+    fig.update_xaxes(title_text="NPS (%)", row=1, col=3)
     fig.update_yaxes(title_text="Density", row=1, col=1)
     
     return fig
 
 
 def plot_prior_vs_posterior(scorer) -> go.Figure:
-    """Plot prior distributions overlaid with posterior distributions for all metrics."""
-    from scipy.stats import lognorm, truncnorm
+    """Plot prior vs aggregated posterior, then aggregated vs individual ASP posteriors."""
+    from scipy.stats import lognorm, norm
     
-    fig = make_subplots(rows=1, cols=3, subplot_titles=(
-        'Success Rate', 'Response Time (hours)', 'Satisfaction (0-10 NPS)'))
+    fig = make_subplots(rows=2, cols=3, subplot_titles=(
+        'Success Rate', 'Response Time (hours)', 'NPS (%)',
+        'Success Rate', 'Response Time (hours)', 'NPS (%)'),
+        vertical_spacing=0.15,
+        row_titles=['Prior vs Aggregated Posterior', 'Aggregated vs Individual ASPs'])
     
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
     
-    # --- PRIORS (orange dashed, same for all ASPs) ---
+    # --- Compute priors ---
     np.random.seed(42)
     alphas = np.random.gamma(1, 1/0.5, 5000)
     betas = np.random.gamma(1, 1/0.5, 5000)
     success_prior = np.random.beta(np.clip(alphas, 0.01, None), np.clip(betas, 0.01, None))
     x_s = np.linspace(0, 1, 200)
     hist_s, _ = np.histogram(success_prior, bins=200, range=(0, 1), density=True)
+    
+    x_r = np.linspace(0.1, 20, 200)
+    y_r = lognorm.pdf(x_r, s=1, scale=2)
+    
+    x_sat = np.linspace(-100, 100, 200)
+    from scipy.stats import norm
+    y_sat = norm.pdf(x_sat, loc=0, scale=50)
+    
+    # --- Compute aggregated posteriors ---
+    all_success = np.concatenate([scorer.trace.posterior['success_rate'].values[:, :, np.where(scorer.asp_ids == a)[0][0]].flatten() for a in scorer.asp_ids])
+    agg_s_h, agg_s_e = np.histogram(all_success, bins=80, density=True)
+    agg_s_x = (agg_s_e[:-1] + agg_s_e[1:]) / 2
+    
+    all_resp = np.concatenate([np.exp(scorer.trace.posterior['response_log_mu'].values[:, :, np.where(scorer.asp_ids == a)[0][0]].flatten()) for a in scorer.asp_ids])
+    all_resp = np.clip(all_resp, 0, 20)
+    agg_r_h, agg_r_e = np.histogram(all_resp, bins=80, range=(0, 20), density=True)
+    agg_r_x = (agg_r_e[:-1] + agg_r_e[1:]) / 2
+    
+    all_sat = np.concatenate([scorer.trace.posterior['nps_mu'].values[:, :, np.where(scorer.asp_ids == a)[0][0]].flatten() * 100 for a in scorer.asp_ids])
+    agg_sat_h, agg_sat_e = np.histogram(all_sat, bins=80, density=True)
+    agg_sat_x = (agg_sat_e[:-1] + agg_sat_e[1:]) / 2
+    
+    # === ROW 1: Prior (orange dashed) vs Aggregated Posterior (white thick) ===
     fig.add_trace(go.Scatter(x=x_s, y=hist_s, mode='lines', fill='tozeroy',
         line=dict(color='rgba(255,165,0,0.6)', width=2, dash='dash'),
         fillcolor='rgba(255,165,0,0.1)', name='Prior', legendgroup='prior', showlegend=True), row=1, col=1)
-    
-    x_r = np.linspace(0.1, 25, 200)
-    y_r = lognorm.pdf(x_r, s=1, scale=3)
     fig.add_trace(go.Scatter(x=x_r, y=y_r, mode='lines', fill='tozeroy',
         line=dict(color='rgba(255,165,0,0.6)', width=2, dash='dash'),
         fillcolor='rgba(255,165,0,0.1)', name='Prior', legendgroup='prior', showlegend=False), row=1, col=2)
-    
-    x_sat = np.linspace(0, 10, 200)
-    a, b = (0 - 7) / 3, (10 - 7) / 3
-    y_sat = truncnorm.pdf(x_sat, a, b, loc=7, scale=3)
     fig.add_trace(go.Scatter(x=x_sat, y=y_sat, mode='lines', fill='tozeroy',
         line=dict(color='rgba(255,165,0,0.6)', width=2, dash='dash'),
         fillcolor='rgba(255,165,0,0.1)', name='Prior', legendgroup='prior', showlegend=False), row=1, col=3)
     
-    # --- POSTERIORS (solid lines per ASP) ---
+    fig.add_trace(go.Scatter(x=agg_s_x, y=agg_s_h, mode='lines',
+        line=dict(color='white', width=3), name='Aggregated Posterior',
+        legendgroup='agg', showlegend=True), row=1, col=1)
+    fig.add_trace(go.Scatter(x=agg_r_x, y=agg_r_h, mode='lines',
+        line=dict(color='white', width=3), name='Aggregated Posterior',
+        legendgroup='agg', showlegend=False), row=1, col=2)
+    fig.add_trace(go.Scatter(x=agg_sat_x, y=agg_sat_h, mode='lines',
+        line=dict(color='white', width=3), name='Aggregated Posterior',
+        legendgroup='agg', showlegend=False), row=1, col=3)
+    
+    # === ROW 2: Aggregated (white thick) vs Individual ASPs (colored thin) ===
+    fig.add_trace(go.Scatter(x=agg_s_x, y=agg_s_h, mode='lines',
+        line=dict(color='white', width=3), name='Aggregated Posterior',
+        legendgroup='agg', showlegend=False), row=2, col=1)
+    fig.add_trace(go.Scatter(x=agg_r_x, y=agg_r_h, mode='lines',
+        line=dict(color='white', width=3), name='Aggregated Posterior',
+        legendgroup='agg', showlegend=False), row=2, col=2)
+    fig.add_trace(go.Scatter(x=agg_sat_x, y=agg_sat_h, mode='lines',
+        line=dict(color='white', width=3), name='Aggregated Posterior',
+        legendgroup='agg', showlegend=False), row=2, col=3)
+    
     for i, asp_id in enumerate(ASP_ORDER):
         if asp_id not in scorer.asp_ids:
             continue
@@ -413,24 +459,25 @@ def plot_prior_vs_posterior(scorer) -> go.Figure:
         h, e = np.histogram(s_samples, bins=50, density=True)
         fig.add_trace(go.Scatter(x=(e[:-1]+e[1:])/2, y=h, mode='lines',
             line=dict(color=color, width=2), name=asp_id,
-            legendgroup=asp_id, showlegend=True), row=1, col=1)
+            legendgroup=asp_id, showlegend=True), row=2, col=1)
         
         log_mu = scorer.trace.posterior['response_log_mu'].values[:, :, asp_pos].flatten()
         r_samples = np.exp(log_mu)
-        h, e = np.histogram(r_samples, bins=50, density=True)
+        r_samples = np.clip(r_samples, 0, 20)
+        h, e = np.histogram(r_samples, bins=50, range=(0, 20), density=True)
         fig.add_trace(go.Scatter(x=(e[:-1]+e[1:])/2, y=h, mode='lines',
             line=dict(color=color, width=2), name=asp_id,
-            legendgroup=asp_id, showlegend=False), row=1, col=2)
+            legendgroup=asp_id, showlegend=False), row=2, col=2)
         
-        sat_samples = scorer.trace.posterior['satisfaction_mu'].values[:, :, asp_pos].flatten()
+        sat_samples = scorer.trace.posterior['nps_mu'].values[:, :, asp_pos].flatten() * 100
         h, e = np.histogram(sat_samples, bins=50, density=True)
         fig.add_trace(go.Scatter(x=(e[:-1]+e[1:])/2, y=h, mode='lines',
             line=dict(color=color, width=2), name=asp_id,
-            legendgroup=asp_id, showlegend=False), row=1, col=3)
+            legendgroup=asp_id, showlegend=False), row=2, col=3)
     
-    fig.update_layout(height=400,
-        title_text="Prior (orange dashed) vs Posterior (solid) — How data updated our beliefs",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    fig.update_layout(height=700,
+        title_text="Prior vs Posterior — How Data Updated Our Beliefs",
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5))
     fig.update_yaxes(rangemode="tozero")
     return fig
 
@@ -452,9 +499,9 @@ def plot_posterior_distributions(scorer, asp_id: str, metric: str = 'success_rat
         title = f"Response Time Posterior Distribution - {asp_id}"
         xaxis_title = "Response Time (hours)"
     elif metric == 'satisfaction':
-        samples = scorer.trace.posterior['satisfaction_mu'].values[:, :, asp_position].flatten()
-        title = f"Satisfaction Posterior Distribution - {asp_id}"
-        xaxis_title = "Satisfaction (0-10 NPS)"
+        samples = scorer.trace.posterior['nps_mu'].values[:, :, asp_position].flatten() * 100
+        title = f"NPS Posterior Distribution - {asp_id}"
+        xaxis_title = "NPS (%)"
     else:
         return go.Figure()
     

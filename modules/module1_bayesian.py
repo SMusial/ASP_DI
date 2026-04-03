@@ -22,6 +22,10 @@ class BayesianASPScorer:
         asp_idx = cat.codes
         self.asp_ids = np.array(cat.categories)
         
+        # Compute NPS per task: promoter=+1, detractor=-1, passive=0
+        nps_scores = historical_data['customer_satisfaction'].apply(
+            lambda x: 1 if x >= 9 else (-1 if x <= 6 else 0)).values.astype(float)
+        
         with pm.Model() as self.model:
             # Success rate: Beta-Binomial (conjugate prior)
             alpha_success = pm.Gamma('alpha_success', alpha=1, beta=0.5, shape=len(self.asp_ids))
@@ -33,21 +37,23 @@ class BayesianASPScorer:
             pm.Bernoulli('success_obs', p=success_rate[asp_idx], 
                         observed=historical_data['success'].values)
             
-            # Response time: LogNormal (always positive, right-skewed)
-            # Prior: median ≈ 3h, σ=1
-            response_log_mu = pm.Normal('response_log_mu', mu=np.log(3), sigma=1, shape=len(self.asp_ids))
+            # Response time: LogNormal (always positive, right-skewed, capped at 12h)
+            response_log_mu = pm.Normal('response_log_mu', mu=np.log(2), sigma=1, shape=len(self.asp_ids))
             response_log_sigma = pm.HalfNormal('response_log_sigma', sigma=1, shape=len(self.asp_ids))
             
-            pm.Lognormal('response_obs', mu=response_log_mu[asp_idx], sigma=response_log_sigma[asp_idx],
-                     observed=historical_data['response_time_hours'].values)
+            pm.TruncatedNormal('response_obs', 
+                     mu=pm.math.exp(response_log_mu[asp_idx] + response_log_sigma[asp_idx]**2/2),
+                     sigma=pm.math.exp(response_log_mu[asp_idx]) * (pm.math.exp(response_log_sigma[asp_idx]**2) - 1)**0.5,
+                     lower=0, upper=12,
+                     observed=historical_data['response_time_hours'].values.clip(max=12))
             
-            # Satisfaction: Truncated Normal (0-10 NPS scale), prior μ=7, σ=3
-            satisfaction_mu = pm.TruncatedNormal('satisfaction_mu', mu=7, sigma=3, lower=0, upper=10, shape=len(self.asp_ids))
-            satisfaction_sigma = pm.HalfNormal('satisfaction_sigma', sigma=2, shape=len(self.asp_ids))
+            # NPS: Normal prior centered at 0 (-100 to +100 scale)
+            # Each task is +1 (promoter), 0 (passive), -1 (detractor)
+            nps_mu = pm.Normal('nps_mu', mu=0, sigma=0.5, shape=len(self.asp_ids))
+            nps_sigma = pm.HalfNormal('nps_sigma', sigma=0.5, shape=len(self.asp_ids))
             
-            pm.TruncatedNormal('satisfaction_obs', mu=satisfaction_mu[asp_idx], 
-                     sigma=satisfaction_sigma[asp_idx], lower=0, upper=10,
-                     observed=historical_data['customer_satisfaction'].values)
+            pm.Normal('nps_obs', mu=nps_mu[asp_idx], sigma=nps_sigma[asp_idx],
+                     observed=nps_scores)
             
             self.trace = pm.sample(n_samples, tune=500, return_inferencedata=True, 
                                   random_seed=42, progressbar=False, cores=1,
@@ -64,7 +70,7 @@ class BayesianASPScorer:
         # LogNormal: exp(log_mu) gives median response time in hours
         log_mu_samples = self.trace.posterior['response_log_mu'].values[:, :, asp_position].flatten()
         response_samples = np.exp(log_mu_samples)  # median of lognormal
-        satisfaction_samples = self.trace.posterior['satisfaction_mu'].values[:, :, asp_position].flatten()
+        nps_samples = self.trace.posterior['nps_mu'].values[:, :, asp_position].flatten() * 100  # convert to %
         
         def get_stats(samples):
             return (np.mean(samples), 
@@ -74,7 +80,7 @@ class BayesianASPScorer:
         return {
             'success_rate': get_stats(success_samples),
             'response_time': get_stats(response_samples),
-            'satisfaction': get_stats(satisfaction_samples)
+            'satisfaction': get_stats(nps_samples)
         }
     
     def score_asps(self, weights: Dict[str, float] = None) -> pd.DataFrame:
@@ -89,21 +95,30 @@ class BayesianASPScorer:
             
             success_norm = metrics['success_rate'][0]
             response_norm = 1 / (1 + metrics['response_time'][0] / 10)
-            satisfaction_norm = metrics['satisfaction'][0] / 10
+            satisfaction_norm = (metrics['satisfaction'][0] + 100) / 200  # NPS -100..+100 → 0..1
             
             score = (weights['success_rate'] * success_norm + 
                     weights['response_time'] * response_norm +
                     weights['satisfaction'] * satisfaction_norm)
             
+            # Proper score CI: compute score at worst-case and best-case metric bounds
+            score_lower = (weights['success_rate'] * metrics['success_rate'][1] + 
+                          weights['response_time'] * (1 / (1 + metrics['response_time'][2] / 10)) +
+                          weights['satisfaction'] * (metrics['satisfaction'][1] + 100) / 200)
+            score_upper = (weights['success_rate'] * metrics['success_rate'][2] + 
+                          weights['response_time'] * (1 / (1 + metrics['response_time'][1] / 10)) +
+                          weights['satisfaction'] * (metrics['satisfaction'][2] + 100) / 200)
+            
             uncertainty = np.mean([
                 metrics['success_rate'][2] - metrics['success_rate'][1],
                 (metrics['response_time'][2] - metrics['response_time'][1]) / 10,
-                (metrics['satisfaction'][2] - metrics['satisfaction'][1]) / 10
+                (metrics['satisfaction'][2] - metrics['satisfaction'][1]) / 200
             ])
             
             results.append({
                 'asp_id': asp_id,
                 'score': score,
+                'score_ci': (score_lower, score_upper),
                 'uncertainty': uncertainty,
                 'success_rate_mean': metrics['success_rate'][0],
                 'success_rate_ci': (metrics['success_rate'][1], metrics['success_rate'][2]),

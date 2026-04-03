@@ -163,12 +163,20 @@ def generate_historical_performance(asp_profiles: pd.DataFrame,
             success_prob = task_quality * complexity_factor
             success = np.random.random() < success_prob
             
-            # Add variance to response time
-            response_time = np.random.gamma(2, 1/task_quality) * response_multiplier * (1 + 0.5 * (complexity == 'High'))
-            response_time *= np.random.uniform(0.7, 1.3)  # Additional variance
+            # Add variance to response time (reduced right skew)
+            response_time = np.random.gamma(3, 0.5/task_quality) * response_multiplier * (1 + 0.3 * (complexity == 'High'))
+            response_time *= np.random.uniform(0.85, 1.15)
+            response_time = min(response_time, 12.0)  # cap at 12h
             
+            # Cost: Climb highest, Mount middle, Std lowest
+            if 'Climb' in asp_id:
+                cost_multiplier = 2.5
+            elif 'Mount' in asp_id:
+                cost_multiplier = 1.3
+            else:
+                cost_multiplier = 1.0
             base_cost = {'Low': 500, 'Medium': 1500, 'High': 3000}[complexity]
-            cost = base_cost * np.random.uniform(0.8, 1.2) * (1 + 0.1 * task_quality)
+            cost = base_cost * cost_multiplier * np.random.uniform(0.8, 1.2)
             
             if success:
                 satisfaction = np.random.normal(satisfaction_base - (response_time / 10), 1.2)
