@@ -515,47 +515,51 @@ def plot_pos_comparison(samples_w, samples_r, name_w, name_r, pos_pct, x_range=N
     return fig
 
 
-def plot_expected_loss(samples_w, samples_r, name_w, name_r, x_range=None):
+def plot_expected_loss(samples_w, samples_r, name_w, name_r, x_range=None, cost_per_point=100000):
     """Plot Expected Loss: E(Loss|choose A) = mean(max(0, score_B - score_A))."""
     loss_choose_w = np.maximum(0, samples_r - samples_w)
     loss_choose_r = np.maximum(0, samples_w - samples_r)
     el_w = loss_choose_w.mean()
     el_r = loss_choose_r.mean()
+    cpp = cost_per_point
     fig = go.Figure()
+    
+    def fmt_dollar(v):
+        return f"${v:,.2f}".replace(",", " ").replace(".", ",").replace(" ", ".")
     
     pos_w = loss_choose_w[loss_choose_w > 0]
     pos_r = loss_choose_r[loss_choose_r > 0]
     
     if len(pos_w) > 2:
-        h_w, e_w = np.histogram(pos_w, bins=min(50, len(pos_w)), density=True)
+        h_w, e_w = np.histogram(pos_w * cpp, bins=min(50, len(pos_w)), density=True)
         fig.add_trace(go.Scatter(x=(e_w[:-1]+e_w[1:])/2, y=h_w, mode='lines', fill='tozeroy',
             line=dict(color='#2ca02c', width=2), fillcolor='rgba(44,160,44,0.2)',
-            name=f"Loss if choosing {name_w} (E={el_w:.3f})"))
+            name=f"Loss if choosing {name_w} (E={fmt_dollar(el_w*cpp)})"))
     if len(pos_r) > 2:
-        h_r, e_r = np.histogram(pos_r, bins=min(50, len(pos_r)), density=True)
+        h_r, e_r = np.histogram(pos_r * cpp, bins=min(50, len(pos_r)), density=True)
         fig.add_trace(go.Scatter(x=(e_r[:-1]+e_r[1:])/2, y=h_r, mode='lines', fill='tozeroy',
             line=dict(color='#d62728', width=2), fillcolor='rgba(214,39,40,0.2)',
-            name=f"Loss if choosing {name_r} (E={el_r:.3f})"))
+            name=f"Loss if choosing {name_r} (E={fmt_dollar(el_r*cpp)})"))
     
     safer = name_w if el_w < el_r else name_r
     ratio = max(el_w, el_r) / max(min(el_w, el_r), 0.001)
+    savings = abs(el_r - el_w) * cpp
     if el_w == 0 and el_r == 0:
         subtitle = f"<span style='font-size:16px'>Both ASPs have zero expected loss — identical performance</span>"
     elif el_w == 0:
-        subtitle = f"<span style='font-size:16px'>E(Loss|{name_w}) = 0.000 — {name_w} never loses to {name_r}</span>"
+        subtitle = f"<span style='font-size:16px'>{name_w} never loses to {name_r} — choosing {name_w} saves <b>{fmt_dollar(el_r*cpp)}</b> per single ASP task</span>"
     elif el_r == 0:
-        subtitle = f"<span style='font-size:16px'>E(Loss|{name_r}) = 0.000 — {name_r} never loses to {name_w}</span>"
+        subtitle = f"<span style='font-size:16px'>{name_r} never loses to {name_w} — choosing {name_r} saves <b>{fmt_dollar(el_w*cpp)}</b> per single ASP task</span>"
     else:
-        subtitle = (f"<span style='font-size:16px'>E(Loss|{name_w}) = {el_w:.3f} — E(Loss|{name_r}) = {el_r:.3f}</span><br>"
-            f"<span style='font-size:13px'>E = mean of max(0, opponent_score − your_score). "
-            f"\U0001f6e1\ufe0f Safer: <b>{safer}</b> ({ratio:.1f}× less risk)</span>")
+        subtitle = (f"<span style='font-size:16px'>E(Loss|{name_w}) = {fmt_dollar(el_w*cpp)} — E(Loss|{name_r}) = {fmt_dollar(el_r*cpp)}</span><br>"
+            f"<span style='font-size:14px'>\U0001f6e1\ufe0f Safer: <b>{safer}</b> — saves <b>{fmt_dollar(savings)}</b> per single ASP task ({ratio:.1f}× less risk)</span>")
     
     fig.update_layout(height=350, margin=dict(t=120, b=60),
         title=dict(text=f"<b>Expected Loss (The \"Safety\" Metric)</b><br>{subtitle}", font=dict(size=18)),
-        xaxis_title="Score Loss (points)", yaxis_title="Density",
+        xaxis_title="Expected Loss ($)", yaxis_title="Density",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     if x_range:
-        fig.update_xaxes(range=[0, x_range[1] - x_range[0]])
+        fig.update_xaxes(range=[0, (x_range[1] - x_range[0]) * cpp])
     fig.update_yaxes(rangemode="tozero")
     return fig, el_w, el_r
 
