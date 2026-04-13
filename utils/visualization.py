@@ -192,7 +192,7 @@ def plot_data_sufficiency(historical_data: pd.DataFrame) -> go.Figure:
     ))
     
     fig.update_layout(
-        title="Historical Data Availability per ASP",
+        title="Historical Volumes of Tasks per ASP",
         xaxis_title="ASP",
         yaxis_title="Number of Tasks",
         height=400

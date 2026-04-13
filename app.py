@@ -67,26 +67,28 @@ if module == "Module 1: Bayesian Analytics":
         st.markdown("""
         ### 📈 The Analytics Maturity Journey
         
-        | Level | Type | Question | ASP Example | Tools |
-        |:------|:-----|:---------|:------------|:------|
-        | 1️⃣ | **Descriptive** | *What happened?* | ASP_Std1 completed 32 tasks with 88% success | Dashboards, reports |
-        | 2️⃣ | **Diagnostic** | *Why did it happen?* | ASP_Climb2 has low NPS because of high response times | Root cause analysis |
-        | 3️⃣ | **Predictive** | *What will happen?* | ASP_Mount1 will likely score 0.62–0.72 on next tasks | **Bayesian posteriors** |
-        | 4️⃣ | **Prescriptive** | *What should we do?* | Choose ASP_Std1 for urban tasks (🟢 Very High Confidence) | **Recommended Decisions** |
+        | Level | Type | Question | Method |
+        |:------|:-----|:---------|:-------|
+        | 1️⃣ | **Descriptive** | *What happened?* | Dashboards, reports |
+        | 2️⃣ | **Diagnostic** | *Why did it happen?* | RCA, Causal Inference (Module 2) |
+        | 3️⃣ | **Predictive** | *What will happen?* | Time-series forecasting, Bayesian Analytics (Module 1 MCMC sampling) |
+        | 4️⃣ | **Prescriptive** | *What should we do?* | Bayesian Analytics (Module 1), Reinforcement Learning (Module 3) |
+        
+        > **Our approach**: Bayesian Analytics spans **Predictive** (MCMC posteriors predict next-task outcomes with uncertainty) and **Prescriptive** (PoS, Expected Loss, Recommended Decisions tell you which ASP to choose and how confident you should be).
         
         ---
         
         ### 🔑 What Bayesian Analytics Adds
         
-        **Simple averages** (Level 1) tell you the past. **Bayesian analytics** (Levels 3-4) tell you the future with confidence:
+        **Simple averages** (Descriptive) tell you the past. **Bayesian analytics** (Prescriptive) tells you **what to do** with confidence:
         
         | Capability | Simple Average | Bayesian Analytics |
         |:-----------|:--------------|:-------------------|
         | Point estimate | ✅ Mean only | ✅ Posterior mean |
         | Uncertainty | ❌ None | ✅ 95% Credible Intervals |
         | Small sample handling | ❌ Unreliable | ✅ Prior regularization |
-        | ASP comparison | ❌ "A > B" | ✅ "A beats B in 85% of scenarios" (PoS) |
-        | Risk quantification | ❌ None | ✅ Expected Loss in $ |
+        | Comparison | ❌ "A > B" | ✅ "A beats B in 85% of scenarios" (PoS) |
+        | Risk quantification | ❌ None | ✅ Expected Loss |
         | Decision confidence | ❌ Gut feeling | ✅ 🟢🟡🟠🔴 levels |
         | Continuous learning | ❌ Retrain from scratch | ✅ Update posterior with new data |
         
@@ -105,7 +107,28 @@ if module == "Module 1: Bayesian Analytics":
         """)
     
     elif page == "Demo":
-    
+        
+        st.markdown("""
+        ### 📋 Problem Statement
+        
+        **Business Problem**: We need to select the best Authorized Service Provider (ASP) for each task category 
+        (Mountain, Standard Urban, High-Risk Climbing), but historical performance data is limited and noisy.
+        Simple averages don't tell us how confident we should be in our choice.
+        
+        **Assumptions**:
+        - Each ASP has a true (unknown) performance level for success rate, response time, and NPS
+        - Historical task data is our only evidence — some ASPs have more data than others
+        - Performance metrics are weighted by business priority (configurable)
+        - Cost of choosing the wrong ASP is quantifiable ($ per score point)
+        
+        **What this demo shows**:
+        1. How Bayesian inference estimates ASP performance **with uncertainty** from limited data
+        2. How priors influence estimates when data is scarce, and fade as data grows
+        3. How to compare ASPs using **Probability of Superiority**, **Expected Loss**, and **Credible Intervals**
+        4. A final **Recommended Decision** per category with confidence level and identified risks
+        """)
+        
+        st.markdown("---")
     # Show data overview
         with st.expander("📁 View Historical Data (INPUT: Prior Knowledge)"):
             st.caption("📥 **INPUT**: Historical performance data used as evidence for Bayesian inference. This represents your prior knowledge about ASP performance.")
@@ -136,60 +159,60 @@ if module == "Module 1: Bayesian Analytics":
             )
     
         # Model configuration
-        st.subheader("⚙️ Model Configuration (INPUT: Hyperparameters)")
-        st.caption("📥 **INPUT**: Hyperparameters that control how different metrics are weighted in the final score.")
+        with st.expander("⚙️ Model Configuration (INPUT: Hyperparameters)"):
+            st.caption("📥 **INPUT**: Hyperparameters that control how different metrics are weighted in the final score.")
     
-        st.markdown("""
-        **Configure how different performance metrics are weighted in the final ASP score:**
-        """)
+            st.markdown("""
+            **Configure how different performance metrics are weighted in the final ASP score:**
+            """)
     
-        col1, col2, col3 = st.columns(3)
+            col1, col2, col3 = st.columns(3)
     
-        with col1:
-            st.markdown("**Success Rate Weight**")
-            st.caption("How important is task completion success? (0.0 = not important, 1.0 = most important)")
-            weight_success = st.slider("Success Rate", 0.0, 1.0, 0.4, 0.05, key='slider_success',
-                                       label_visibility='collapsed')
-        with col2:
-            st.markdown("**Response Time Weight**")
-            st.caption("How important is fast response? (0.0 = speed doesn't matter, 1.0 = speed is critical)")
-            weight_response = st.slider("Response Time", 0.0, 1.0, 0.3, 0.05, key='slider_response',
-                                        label_visibility='collapsed')
-        with col3:
-            st.markdown("**Satisfaction Weight**")
-            st.caption("How important is customer satisfaction? (0.0 = ignore feedback, 1.0 = prioritize satisfaction)")
-            weight_satisfaction = st.slider("Satisfaction", 0.0, 1.0, 0.3, 0.05, key='slider_satisfaction',
+            with col1:
+                st.markdown("**Success Rate Weight**")
+                st.caption("How important is task completion success? (0.0 = not important, 1.0 = most important)")
+                weight_success = st.slider("Success Rate", 0.0, 1.0, 0.4, 0.05, key='slider_success',
                                            label_visibility='collapsed')
+            with col2:
+                st.markdown("**Response Time Weight**")
+                st.caption("How important is fast response? (0.0 = speed doesn't matter, 1.0 = speed is critical)")
+                weight_response = st.slider("Response Time", 0.0, 1.0, 0.3, 0.05, key='slider_response',
+                                            label_visibility='collapsed')
+            with col3:
+                st.markdown("**Satisfaction Weight**")
+                st.caption("How important is customer satisfaction? (0.0 = ignore feedback, 1.0 = prioritize satisfaction)")
+                weight_satisfaction = st.slider("Satisfaction", 0.0, 1.0, 0.3, 0.05, key='slider_satisfaction',
+                                               label_visibility='collapsed')
     
-        # Track slider changes
-        current_weights = (weight_success, weight_response, weight_satisfaction)
-        if 'previous_weights' not in st.session_state:
-            st.session_state.previous_weights = current_weights
-            st.session_state.slider_start_time = time.time()
+            # Track slider changes
+            current_weights = (weight_success, weight_response, weight_satisfaction)
+            if 'previous_weights' not in st.session_state:
+                st.session_state.previous_weights = current_weights
+                st.session_state.slider_start_time = time.time()
     
-        if current_weights != st.session_state.previous_weights:
-            elapsed = time.time() - st.session_state.slider_start_time
-            st.caption(f"⏱️ Configuration updated in {str(timedelta(seconds=int(elapsed)))}")
-            st.session_state.previous_weights = current_weights
-            st.session_state.slider_start_time = time.time()
+            if current_weights != st.session_state.previous_weights:
+                elapsed = time.time() - st.session_state.slider_start_time
+                st.caption(f"⏱️ Configuration updated in {str(timedelta(seconds=int(elapsed)))}")
+                st.session_state.previous_weights = current_weights
+                st.session_state.slider_start_time = time.time()
     
-        total_weight = weight_success + weight_response + weight_satisfaction
-        if abs(total_weight - 1.0) > 0.01:
-            st.warning(f"⚠️ Weights sum to {total_weight:.2f}. They will be normalized to 1.0")
-            weight_success /= total_weight
-            weight_response /= total_weight
-            weight_satisfaction /= total_weight
+            total_weight = weight_success + weight_response + weight_satisfaction
+            if abs(total_weight - 1.0) > 0.01:
+                st.warning(f"⚠️ Weights sum to {total_weight:.2f}. They will be normalized to 1.0")
+                weight_success /= total_weight
+                weight_response /= total_weight
+                weight_satisfaction /= total_weight
     
-        weights = {
-            'success_rate': weight_success,
-            'response_time': weight_response,
-            'satisfaction': weight_satisfaction
-        }
+            weights = {
+                'success_rate': weight_success,
+                'response_time': weight_response,
+                'satisfaction': weight_satisfaction
+            }
     
-        st.markdown("**💰 Cost per Score Point** (for Expected Loss in $)")
-        cost_per_point = st.number_input("$ value of 1 score point (e.g., SLA penalty, rework cost)", 
-                                          min_value=0, max_value=1000000, value=100000, step=10000,
-                                          format="%d", key='cost_per_point')
+            st.markdown("**💰 Cost per Score Point** (for Expected Loss in $)")
+            cost_per_point = st.number_input("$ value of 1 score point (e.g., SLA penalty, rework cost)", 
+                                              min_value=0, max_value=1000000, value=100000, step=10000,
+                                              format="%d", key='cost_per_point')
     
         # Run Bayesian model
         if st.button("🚀 Run Bayesian Analysis", type="primary"):
@@ -205,417 +228,14 @@ if module == "Module 1: Bayesian Analytics":
     
         # Display results
         if 'bayesian_scores' in st.session_state:
-            st.subheader("📈 Results (OUTPUT)")
-            st.caption("📤 **OUTPUT**: Posterior distributions from Bayesian inference - these are the model's predictions with uncertainty quantification.")
-        
-            # Bayesian vs Simple Average Comparison
-            st.markdown("### 🎯 Bayesian Value Demonstration: vs Simple Averages")
-        
-            with st.expander("🔑 Key Difference Explained"):
-                st.info("""
-                **Simple Average (Gray Bars)** = Just add up all results and divide by count
-            
-                **Bayesian Mean (Blue Diamonds)** = Similar value BUT with uncertainty quantification
-            
-                **Why are they SIMILAR but NOT IDENTICAL?**
-                - Bayesian = Prior belief (orange curves below) + Data → Posterior
-                - With **many tasks**: data dominates → Bayesian ≈ Simple Average
-                - With **few tasks**: prior still has influence → Bayesian ≠ Simple Average
-            
-                **Why This Matters:**
-                - ASP with 100% success from 2 tasks → Simple average says "perfect!" 
-                - Bayesian says "probably 50-95%, need more data" → safer decision
-                """)
-        
-            st.plotly_chart(
-                plot_prior_distributions(),
-                use_container_width=True
-            )
-            st.caption("☝️ These are our **prior beliefs** before seeing any data. The Bayesian model combines these priors with the actual task data to produce the posterior (blue diamonds below).")
-        
-            st.plotly_chart(
-                plot_bayesian_vs_simple_average(st.session_state.bayesian_scores, st.session_state.historical_data),
-                use_container_width=True
-            )
-        
-            st.markdown("### 📊 Prior vs Posterior — How Data Updated Our Beliefs")
-            st.caption("Orange dashed = our initial beliefs (priors). Solid lines = updated beliefs after seeing data (posteriors). Notice how ASPs with more data have narrower, more confident posteriors.")
-            st.plotly_chart(
-                plot_prior_vs_posterior(st.session_state.scorer),
-                use_container_width=True
-            )
-        
-            # Overall scores
-            st.markdown("### ASP Bayesian Scores with Uncertainty (OUTPUT: Sampled Posterior)")
-            st.caption("📤 **OUTPUT**: Posterior probability distributions sampled via MCMC. Each score represents the mean of the posterior, with error bars showing 95% credible intervals.")
-            st.warning(f"""
-            **📐 How is the Score calculated?**
-        
-            Score = (Success Rate × {weights['success_rate']:.0%}) + (Response Time × {weights['response_time']:.0%}) + (Satisfaction × {weights['satisfaction']:.0%})
-        
-            It is a **weighted average** of three normalized metrics:
-            - **Success Rate** (0-1): Used directly as probability
-            - **Response Time**: Normalized as 1/(1 + hours/10) — lower time = higher score
-            - **Satisfaction**: Normalized as (NPS+100)/200 — higher NPS = higher score
-        
-            Each metric is multiplied by its weight (set in Model Configuration above), then summed.
-            """)
-            st.plotly_chart(
-                plot_asp_scores_with_uncertainty(st.session_state.bayesian_scores),
-                use_container_width=True
-            )
-        
-            # Full Posterior Distributions
-            st.markdown("### 📊 Full Posterior Distributions (Complete Uncertainty View)")
-            st.caption("📤 **OUTPUT**: Complete probability distributions showing all 500 MCMC samples. This is what Bayesian gives you that simple averages cannot.")
-        
-            # Single metric selector at the top
-            col1, col2 = st.columns(2)
-            with col1:
-                metric_choice = st.selectbox(
-                    "Select Metric to Analyze",
-                    ["success_rate", "response_time", "satisfaction"],
-                    format_func=lambda x: {
-                        "success_rate": "Success Rate (probability, 0-1)",
-                        "response_time": "Response Time (hours)",
-                        "satisfaction": "Customer NPS (%)"
-                    }[x],
-                    key='unified_metric_selector'
-                )
-            with col2:
-                dist_asp = st.selectbox("Select ASP", st.session_state.bayesian_scores['asp_id'].tolist(), key='dist_asp')
-        
-            # Show full distribution for selected ASP and metric
-            st.plotly_chart(
-                plot_posterior_distributions(st.session_state.scorer, dist_asp, metric_choice),
-                use_container_width=True
-            )
-        
-            # Detailed metrics comparison across all ASPs
-            st.subheader("Detailed Metric Analysis Across All ASPs")
-            st.caption("📤 **OUTPUT**: Compare the selected metric across all ASPs with uncertainty intervals.")
-        
-            st.plotly_chart(
-                plot_metric_distributions(st.session_state.bayesian_scores, metric_choice),
-                use_container_width=True
-            )
-        
-            # Continuous Learning Simulator (BEFORE scores so updates are reflected)
-            st.markdown("---")
-            st.subheader("🔄 Continuous Learning Simulator")
-            st.info("**Bayesian Value #3**: Watch how posteriors update as new data arrives. Add a task and see how ALL scores, rankings, and recommendations update instantly.")
-        
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                sim_asp = st.selectbox("Select ASP", st.session_state.bayesian_scores['asp_id'].tolist(), key='sim_asp')
-            with col2:
-                sim_success = st.selectbox("Task Success?", [True, False], format_func=lambda x: "✅ Success" if x else "❌ Failure")
-            with col3:
-                sim_response = st.number_input("Response Time (hours)", min_value=0.5, max_value=24.0, value=4.0, step=0.5)
-            with col4:
-                sim_satisfaction = st.slider("Satisfaction (0-10)", 0.0, 10.0, 7.0, 0.5)
-        
-            if sim_asp:
-                current_asp_data = st.session_state.bayesian_scores[st.session_state.bayesian_scores['asp_id'] == sim_asp].iloc[0]
-                current_task_count = len(st.session_state.historical_data[st.session_state.historical_data['asp_id'] == sim_asp])
-                st.markdown(f"""
-                **📊 Current State for {sim_asp}:** Tasks: **{current_task_count}** | Score: **{current_asp_data['score']:.3f}** ± {current_asp_data['uncertainty']:.3f} | Success: **{current_asp_data['success_rate_mean']:.1%}** | Response: **{current_asp_data['response_time_mean']:.1f}h** | Satisfaction: **{current_asp_data['satisfaction_mean']:.1f}%**
-                """)
-                with st.expander(f"📋 View ALL Historical Tasks for {sim_asp} ({current_task_count} tasks)"):
-                    asp_tasks = st.session_state.historical_data[st.session_state.historical_data['asp_id'] == sim_asp].copy()
-                    asp_tasks = asp_tasks[['task_id', 'asp_id', 'complexity', 'success', 'response_time_hours', 'customer_satisfaction', 'sla_met']]
-                    st.dataframe(asp_tasks, use_container_width=True, hide_index=True)
-        
-            if st.button("➕ Add New Task & Update Posterior", type="primary"):
-                new_task = pd.DataFrame([{
-                    'asp_id': sim_asp,
-                    'task_id': f"{sim_asp}_NEW_{len(st.session_state.historical_data)}",
-                    'complexity': 'Medium',
-                    'success': sim_success,
-                    'response_time_hours': sim_response,
-                    'cost': 1500.0,
-                    'customer_satisfaction': sim_satisfaction,
-                    'sla_met': sim_response < 24 and sim_success
-                }])
-                st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_task], ignore_index=True)
-            
-                with st.spinner("Updating posterior with new evidence..."):
-                    scorer = BayesianASPScorer()
-                    scorer.fit(st.session_state.historical_data, n_samples=500)
-                    st.session_state.bayesian_scores = scorer.score_asps(weights)
-                    st.session_state.scorer = scorer
-            
-                st.rerun()
-        
-            st.markdown("---")
-        
-            # Scores table
-            st.subheader("ASP Scores Table (OUTPUT: Summary Statistics)")
-            st.caption("📤 **OUTPUT**: Posterior means and 95% credible intervals for all metrics.")
-        
-            display_df = st.session_state.bayesian_scores.copy()
-            display_df = display_df.rename(columns={
-                'success_rate_mean': 'Success Rate (probability)',
-                'response_time_mean': 'Response Time (hours)',
-                'satisfaction_mean': 'NPS (%)'
-            })
-            display_df['success_rate_ci'] = display_df['success_rate_ci'].apply(lambda x: f"[{x[0]:.3f}, {x[1]:.3f}]")
-            display_df['response_time_ci'] = display_df['response_time_ci'].apply(lambda x: f"[{x[0]:.3f}h, {x[1]:.3f}h]")
-            display_df['satisfaction_ci'] = display_df['satisfaction_ci'].apply(lambda x: f"[{x[0]:.1f}%, {x[1]:.1f}%]")
-            display_cols = ['asp_id', 'score', 'uncertainty', 
-                           'Success Rate (probability)', 'success_rate_ci',
-                           'Response Time (hours)', 'response_time_ci',
-                           'NPS (%)', 'satisfaction_ci']
-            st.dataframe(
-                display_df[display_cols].style.background_gradient(subset=['score'], cmap='RdYlGn'),
-                use_container_width=True
-            )
-        
-            # Recommendation
-            best_asp = st.session_state.bayesian_scores.iloc[0]
-            asp_profile = st.session_state.asp_profiles[st.session_state.asp_profiles['asp_id']==best_asp['asp_id']]
-            specialization = asp_profile['specialization'].values[0] if 'specialization' in asp_profile.columns else 'general work'
-            st.success(f"""
-            **🏆 Recommended ASP: {best_asp['asp_id']}** ({specialization})
-            - Score: {best_asp['score']:.3f} ± {best_asp['uncertainty']:.3f}
-            - Success Rate: {best_asp['success_rate_mean']:.1%}
-            - Avg Response Time: {best_asp['response_time_mean']:.1f} hours
-            - Customer Satisfaction: {best_asp['satisfaction_mean']:.1f}%
-            """)
-        
-            # Key Business Decisions powered by Bayesian Analytics
-            worst_asp = st.session_state.bayesian_scores.iloc[-1]
-            scores = st.session_state.bayesian_scores
-            with st.expander("💼 Key Business Decisions (Bayesian Value for Stakeholders)", expanded=True):
-                st.markdown(f"""
-    **What Bayesian Analytics enables that simple averages cannot:**
-
-    | # | Decision | Bayesian Insight | Business Impact |
-    |:--|:---------|:-----------------|:----------------|
-    | 1 | **Best ASP selection** | {best_asp['asp_id']} scores {best_asp['score']:.3f} with {best_asp['score_ci'][0]:.3f}–{best_asp['score_ci'][1]:.3f} range | Even worst-case outperforms alternatives |
-    | 2 | **Avoid worst performer** | {worst_asp['asp_id']} scores {worst_asp['score']:.3f} — {((best_asp['score']-worst_asp['score'])/worst_asp['score']*100):.0f}% below best | Quantified risk of wrong choice |
-    | 3 | **Confidence in decision** | {best_asp['asp_id']} uncertainty ±{best_asp['uncertainty']:.3f} vs {worst_asp['asp_id']} ±{worst_asp['uncertainty']:.3f} | More data = narrower CI = safer decisions |
-    | 4 | **Data collection priority** | {scores.loc[scores['uncertainty'].idxmax(), 'asp_id']} has highest uncertainty (±{scores['uncertainty'].max():.3f}) | Invest in data where it matters most |
-    | 5 | **Per-category winners** | Mountain: {scores[scores['asp_id'].str.contains('Mount')].iloc[0]['asp_id']}, Urban: {scores[scores['asp_id'].str.contains('Std')].iloc[0]['asp_id']}, Climbing: {scores[scores['asp_id'].str.contains('Climb')].iloc[0]['asp_id']} | Right ASP for right task type |
-
-    **🎯 Bottom line**: Bayesian analytics doesn't just tell you *who is best* — it tells you **how confident** you should be in that choice, and **what could go wrong** (floor scores). This turns ASP selection from gut feeling into data-driven risk management.
-                """)
-        
-            # Helper: CI-based risk analysis for a pair of ASPs
-            def ci_risk_analysis(w, r):
-                if r is None:
-                    return ""
-                overlaps = []
-                if r['success_rate_ci'][1] > w['success_rate_ci'][0]:
-                    overlaps.append(f"Success Rate: {r['asp_id']} best ({r['success_rate_ci'][1]:.1%}) > {w['asp_id']} worst ({w['success_rate_ci'][0]:.1%})")
-                if r['response_time_ci'][0] < w['response_time_ci'][1]:
-                    overlaps.append(f"Response Time: {r['asp_id']} best ({r['response_time_ci'][0]:.1f}h) < {w['asp_id']} worst ({w['response_time_ci'][1]:.1f}h)")
-                if r['satisfaction_ci'][1] > w['satisfaction_ci'][0]:
-                    overlaps.append(f"Satisfaction: {r['asp_id']} best ({r['satisfaction_ci'][1]:.1f}%) > {w['asp_id']} worst ({w['satisfaction_ci'][0]:.1f}%)")
-                if overlaps:
-                    overlap_list = "\n".join([f"  - {o}" for o in overlaps])
-                    w_floor_winner = w['asp_id'] if w['score_ci'][0] > r['score_ci'][0] else r['asp_id']
-                    return f"""
-    ⚠️ **CI Overlap on {len(overlaps)} metric(s)** — runner-up could outperform:
-
-    {overlap_list}
-
-    | Perspective | {w['asp_id']} | {r['asp_id']} | Choose |
-    |:--|:--:|:--:|:--|
-    | 🔻 Floor | {w['score_ci'][0]:.3f} | {r['score_ci'][0]:.3f} | **{w_floor_winner}** |
-    | ⚖️ Mean | {w['score']:.3f} | {r['score']:.3f} | **{w['asp_id']}** |
-    | 🔺 Ceiling | {w['score_ci'][1]:.3f} | {r['score_ci'][1]:.3f} | **{w['asp_id'] if w['score_ci'][1] > r['score_ci'][1] else r['asp_id']}** |"""
-                else:
-                    return f"""
-    ✅ **No CI overlap** — {w['asp_id']} outperforms {r['asp_id']} even in worst-case.
-
-    | Perspective | {w['asp_id']} | {r['asp_id']} |
-    |:--|:--:|:--:|
-    | 🔻 Floor | {w['score_ci'][0]:.3f} | {r['score_ci'][0]:.3f} |
-    | ⚖️ Mean | {w['score']:.3f} | {r['score']:.3f} |
-    | 🔺 Ceiling | {w['score_ci'][1]:.3f} | {r['score_ci'][1]:.3f} |"""
-        
-            # Helper: render category analysis as comparison table
-            def render_category(cat_asps, cat_name, task_type, cpp=100000):
-                if len(cat_asps) < 2:
-                    return
-                w = cat_asps.iloc[0]
-                r = cat_asps.iloc[1]
-            
-                # Probability of Superiority
-                samples_w = st.session_state.scorer.get_score_samples(w['asp_id'], weights)
-                samples_r = st.session_state.scorer.get_score_samples(r['asp_id'], weights)
-                pos_pct = (samples_w > samples_r).mean() * 100
-            
-                # Compute shared x-range for all 3 plots
-                all_samples = np.concatenate([samples_w, samples_r])
-                x_min = max(0, np.percentile(all_samples, 0.5) - 0.05)
-                x_max = np.percentile(all_samples, 99.5) + 0.05
-                x_range = [x_min, x_max]
-            
-                st.plotly_chart(
-                    plot_pos_comparison(samples_w, samples_r, w['asp_id'], r['asp_id'], pos_pct, x_range),
-                    use_container_width=True
-                )
-            
-                ci_fig, ci_w, ci_r, ci_overlap = plot_credible_interval(samples_w, samples_r, w['asp_id'], r['asp_id'], x_range)
-                st.plotly_chart(ci_fig, use_container_width=True)
-            
-                el_fig, el_w, el_r = plot_expected_loss(samples_w, samples_r, w['asp_id'], r['asp_id'], x_range, cpp)
-                st.plotly_chart(el_fig, use_container_width=True)
-            
-                n_w = len(st.session_state.historical_data[st.session_state.historical_data['asp_id'] == w['asp_id']])
-                n_r = len(st.session_state.historical_data[st.session_state.historical_data['asp_id'] == r['asp_id']])
-                safer = w['asp_id'] if el_w < el_r else r['asp_id']
-            
-                # 2d: Hide metrics table and CI overlap in expander
-                with st.expander("📋 Detailed Metrics & CI Overlap Analysis"):
-                    # Build comparison table
-                    def fmt_ci(ci):
-                        return f"[{ci[0]:.3f}, {ci[1]:.3f}]"
-                    def fmt_ci_pct(ci):
-                        return f"[{ci[0]:.1%}, {ci[1]:.1%}]"
-                
-                    table_data = {
-                        'Metric': ['Tasks', 'Overall Score', 'Success Rate ↑', 'Response Time (h) ↓', 'NPS (%) ↑'],
-                        f"🥇 {w['asp_id']}": [
-                            f"{n_w}",
-                            f"{w['score']:.3f} ± {w['uncertainty']:.3f}",
-                            f"{w['success_rate_mean']:.1%} {fmt_ci_pct(w['success_rate_ci'])}",
-                            f"{w['response_time_mean']:.1f} {fmt_ci(w['response_time_ci'])}",
-                            f"{w['satisfaction_mean']:.1f}% {fmt_ci(w['satisfaction_ci'])}"
-                        ],
-                        f"🥈 {r['asp_id']}": [
-                            f"{n_r}",
-                            f"{r['score']:.3f} ± {r['uncertainty']:.3f}",
-                            f"{r['success_rate_mean']:.1%} {fmt_ci_pct(r['success_rate_ci'])}",
-                            f"{r['response_time_mean']:.1f} {fmt_ci(r['response_time_ci'])}",
-                            f"{r['satisfaction_mean']:.1f}% {fmt_ci(r['satisfaction_ci'])}"
-                        ],
-                        'Winner': [
-                            f"{w['asp_id'] if n_w > n_r else r['asp_id']} (more data)",
-                            f"{w['asp_id']} (+{w['score']-r['score']:.3f})",
-                            f"{w['asp_id'] if w['success_rate_mean'] > r['success_rate_mean'] else r['asp_id']} (higher ↑)",
-                            f"{w['asp_id'] if w['response_time_mean'] < r['response_time_mean'] else r['asp_id']} (lower ↓)",
-                            f"{w['asp_id'] if w['satisfaction_mean'] > r['satisfaction_mean'] else r['asp_id']} (higher ↑)"
-                        ]
-                    }
-                    st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
-                
-                    # 2c: CI overlap analysis (no recommendation, no "collect more data")
-                    st.markdown(ci_risk_analysis(w, r))
-            
-                # Business Value Summary Table with medals
-                st.markdown(f"#### 📊 Quantified Business Value: {w['asp_id']} vs {r['asp_id']}")
-            
-                # 4: CI verdict with justification
-                if ci_overlap:
-                    ci_w_width = ci_w[1] - ci_w[0]
-                    ci_r_width = ci_r[1] - ci_r[0]
-                    wider = r['asp_id'] if ci_r_width > ci_w_width else w['asp_id']
-                    wider_n = n_r if ci_r_width > ci_w_width else n_w
-                    # Estimate: to halve CI width, need ~4x more data
-                    needed = wider_n * 3
-                    ci_verdict = f"⚠️ Overlap — {wider} needs ~{needed} tasks (currently {wider_n}) to narrow CI"
-                else:
-                    ci_verdict = "✅ No overlap — clear winner"
-            
-                def fmt_dollar(v):
-                    return f"${v:,.2f}".replace(",", " ").replace(".", ",").replace(" ", ".")
-            
-                bv_data = {
-                    'Metric': [
-                        '🎯 Probability of Superiority',
-                        '📏 95% Credible Interval',
-                        '🛡️ Expected Loss',
-                        '💰 Expected Loss ($)'
-                    ],
-                    f"🥇 {w['asp_id']}": [
-                        f"Wins {pos_pct:.0f}% of samples",
-                        f"[{ci_w[0]:.3f}, {ci_w[1]:.3f}]",
-                        f"E(Loss) = {el_w:.3f}",
-                        fmt_dollar(el_w * cpp)
-                    ],
-                    f"🥈 {r['asp_id']}": [
-                        f"Wins {100-pos_pct:.0f}% of samples",
-                        f"[{ci_r[0]:.3f}, {ci_r[1]:.3f}]",
-                        f"E(Loss) = {el_r:.3f}",
-                        fmt_dollar(el_r * cpp)
-                    ],
-                    'Verdict': [
-                        f"{'🟢' if pos_pct >= 75 else '🟡' if pos_pct >= 60 else '🔴'} {w['asp_id'] if pos_pct > 50 else r['asp_id']} is superior",
-                        ci_verdict,
-                        f"🛡️ {safer} is the safer choice",
-                        f"💰 Choosing {safer} saves {fmt_dollar(abs(el_r - el_w) * cpp)} per single ASP task"
-                    ]
-                }
-                st.dataframe(pd.DataFrame(bv_data), use_container_width=True, hide_index=True)
-            
-                if pos_pct >= 90:
-                    conf_label = "🟢 Very High Confidence"
-                elif pos_pct >= 75:
-                    conf_label = "🟡 Moderate Confidence"
-                elif pos_pct >= 60:
-                    conf_label = "🟠 Low Confidence"
-                else:
-                    conf_label = "🔴 Very Low Confidence"
-                st.markdown(f"**Recommendation**: For {task_type}, choose **{w['asp_id']}** — {conf_label} (PoS: {pos_pct:.0f}%)")
-        
-            # Insights
-            with st.expander("💡 Key Insights (Dynamic - Based on Current Results)"):
-                top_asp = st.session_state.bayesian_scores.iloc[0]
-            
-                def get_specialization(asp_id):
-                    asp_prof = st.session_state.asp_profiles[st.session_state.asp_profiles['asp_id']==asp_id]
-                    return asp_prof['specialization'].values[0] if 'specialization' in asp_prof.columns else 'N/A'
-            
-                mountain_asps = st.session_state.bayesian_scores[st.session_state.bayesian_scores['asp_id'].str.contains('Mount')].sort_values('score', ascending=False)
-                std_asps = st.session_state.bayesian_scores[st.session_state.bayesian_scores['asp_id'].str.contains('Std')].sort_values('score', ascending=False)
-                climb_asps = st.session_state.bayesian_scores[st.session_state.bayesian_scores['asp_id'].str.contains('Climb')].sort_values('score', ascending=False)
-            
-                st.markdown(f"""
-                **Bayesian Analytics Results Summary:**
-            
-                **1. Current Model Configuration (Hyperparameters):**
-                - Success Rate Weight: **{weights['success_rate']:.1%}** - {"🔴 High priority" if weights['success_rate'] > 0.4 else "🟡 Moderate priority" if weights['success_rate'] > 0.2 else "⚪ Low priority"}
-                - Response Time Weight: **{weights['response_time']:.1%}** - {"🔴 High priority" if weights['response_time'] > 0.4 else "🟡 Moderate priority" if weights['response_time'] > 0.2 else "⚪ Low priority"}
-                - Customer Satisfaction Weight: **{weights['satisfaction']:.1%}** - {"🔴 High priority" if weights['satisfaction'] > 0.4 else "🟡 Moderate priority" if weights['satisfaction'] > 0.2 else "⚪ Low priority"}
-            
-                **2. Score Formula & Risk Bounds:**
-            
-                `Score = SuccessRate × {weights['success_rate']:.0%} + ResponseNorm × {weights['response_time']:.0%} + Satisfaction/10 × {weights['satisfaction']:.0%}`
-            
-                where `ResponseNorm = 1/(1 + hours/10)` (lower time → higher score)
-            
-                Each score has three values derived from the 95% credible intervals:
-                - 🔻 **Floor (worst-case)** = score using lower CI bounds for success & satisfaction, upper CI for response time
-                - ⚖️ **Mean** = score using posterior means
-                - 🔺 **Ceiling (best-case)** = score using upper CI bounds for success & satisfaction, lower CI for response time
-                """)
-            
-                st.markdown("---")
-                st.markdown("### 🏔️ Mountain Operations Analysis")
-                render_category(mountain_asps, "Mountain", "mountain terrain tasks", cost_per_point)
-            
-                st.markdown("---")
-                st.markdown("### 🏙️ Standard Urban Tasks Analysis")
-                render_category(std_asps, "Standard", "standard urban tasks", cost_per_point)
-            
-                st.markdown("---")
-                st.markdown("### 🧗 High-Risk Climbing Analysis")
-                render_category(climb_asps, "Climbing", "high-risk climbing tasks", cost_per_point)
-        
-            # Recommended Decisions at the end
-            st.markdown("---")
-            st.subheader("🏆 Recommended Decisions")
-        
+            # Recommended Decisions FIRST (visible by default)
             scores = st.session_state.bayesian_scores
             categories = [
                 ("🏔️ Mountain", "Mount"),
                 ("🏙️ Standard Urban", "Std"),
                 ("🧗 High-Risk Climbing", "Climb")
             ]
-        
+            
             summary_rows = []
             for cat_label, cat_key in categories:
                 cat_asps = scores[scores['asp_id'].str.contains(cat_key)].sort_values('score', ascending=False)
@@ -635,7 +255,6 @@ if module == "Module 1: Bayesian Analytics":
                         conf = "🟠 Low"
                     else:
                         conf = "🔴 Very Low"
-                    # Risks
                     risks = []
                     if ci_overlap:
                         risks.append("CIs overlap — runner-up could outperform")
@@ -648,16 +267,429 @@ if module == "Module 1: Bayesian Analytics":
                     if pos < 75:
                         risks.append(f"Low confidence ({pos:.0f}% PoS)")
                     risk_text = "; ".join(risks) if risks else "✅ No significant risks"
-                
-                    summary_rows.append({
-                        'Category': cat_label,
-                        '🥇 Winner': w['asp_id'],
-                        '🥈 Runner-up': r['asp_id'],
-                        'Confidence': conf,
-                        'Risks': risk_text
-                    })
+                    summary_rows.append([cat_label, w['asp_id'], r['asp_id'], conf, risk_text])
+            
+            # Render as HTML table inside green border
+            rows_html = ""
+            for row in summary_rows:
+                rows_html += "<tr>" + "".join(f"<td style='padding:10px;border-bottom:1px solid #333'>{c}</td>" for c in row) + "</tr>"
+            
+            st.markdown(f"""
+            <style>
+            @keyframes pulse-glow {{
+                0% {{ box-shadow: 0 0 5px #00cc00; }}
+                50% {{ box-shadow: 0 0 25px #00ff00, 0 0 50px #00ff00; }}
+                100% {{ box-shadow: 0 0 5px #00cc00; }}
+            }}
+            </style>
+            <div style="border:4px dotted #00cc00; border-radius:12px; padding:20px; margin:15px 0; animation:pulse-glow 2s ease-in-out infinite;">
+            <h3>🏆 Recommended Decisions</h3>
+            <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+            <tr>{"".join(f"<th style='padding:10px;text-align:left;border-bottom:2px solid #00cc00'>{h}</th>" for h in ['Category','🥇 Winner','🥈 Runner-up','Confidence','Risks'])}</tr>
+            {rows_html}
+            </table>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Detailed analysis hidden by default
+            with st.expander("📈 Detailed Analysis (Charts, Scores, Key Insights)"):
         
-            st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+            # Bayesian vs Simple Average Comparison
+                st.markdown("### 🎯 Bayesian Value Demonstration: vs Simple Averages")
+        
+                with st.expander("🔑 Key Difference Explained"):
+                    st.info("""
+                    **Simple Average (Gray Bars)** = Just add up all results and divide by count
+            
+                    **Bayesian Mean (Blue Diamonds)** = Similar value BUT with uncertainty quantification
+            
+                    **Why are they SIMILAR but NOT IDENTICAL?**
+                    - Bayesian = Prior belief (orange curves below) + Data → Posterior
+                    - With **many tasks**: data dominates → Bayesian ≈ Simple Average
+                    - With **few tasks**: prior still has influence → Bayesian ≠ Simple Average
+            
+                    **Why This Matters:**
+                    - ASP with 100% success from 2 tasks → Simple average says "perfect!" 
+                    - Bayesian says "probably 50-95%, need more data" → safer decision
+                    """)
+        
+                st.plotly_chart(
+                    plot_prior_distributions(),
+                    use_container_width=True
+                )
+                st.caption("☝️ These are our **prior beliefs** before seeing any data. The Bayesian model combines these priors with the actual task data to produce the posterior (blue diamonds below).")
+        
+                st.plotly_chart(
+                    plot_bayesian_vs_simple_average(st.session_state.bayesian_scores, st.session_state.historical_data),
+                    use_container_width=True
+                )
+        
+                st.markdown("### 📊 Prior vs Posterior — How Data Updated Our Beliefs")
+                st.caption("Orange dashed = our initial beliefs (priors). Solid lines = updated beliefs after seeing data (posteriors). Notice how ASPs with more data have narrower, more confident posteriors.")
+                st.plotly_chart(
+                    plot_prior_vs_posterior(st.session_state.scorer),
+                    use_container_width=True
+                )
+        
+                # Overall scores
+                st.markdown("### ASP Bayesian Scores with Uncertainty (OUTPUT: Sampled Posterior)")
+                st.caption("📤 **OUTPUT**: Posterior probability distributions sampled via MCMC. Each score represents the mean of the posterior, with error bars showing 95% credible intervals.")
+                st.warning(f"""
+                **📐 How is the Score calculated?**
+        
+                Score = (Success Rate × {weights['success_rate']:.0%}) + (Response Time × {weights['response_time']:.0%}) + (Satisfaction × {weights['satisfaction']:.0%})
+        
+                It is a **weighted average** of three normalized metrics:
+                - **Success Rate** (0-1): Used directly as probability
+                - **Response Time**: Normalized as 1/(1 + hours/10) — lower time = higher score
+                - **Satisfaction**: Normalized as (NPS+100)/200 — higher NPS = higher score
+        
+                Each metric is multiplied by its weight (set in Model Configuration above), then summed.
+                """)
+                st.plotly_chart(
+                    plot_asp_scores_with_uncertainty(st.session_state.bayesian_scores),
+                    use_container_width=True
+                )
+        
+                # Full Posterior Distributions
+                st.markdown("### 📊 Full Posterior Distributions (Complete Uncertainty View)")
+                st.caption("📤 **OUTPUT**: Complete probability distributions showing all 500 MCMC samples. This is what Bayesian gives you that simple averages cannot.")
+        
+                # Single metric selector at the top
+                col1, col2 = st.columns(2)
+                with col1:
+                    metric_choice = st.selectbox(
+                        "Select Metric to Analyze",
+                        ["success_rate", "response_time", "satisfaction"],
+                        format_func=lambda x: {
+                            "success_rate": "Success Rate (probability, 0-1)",
+                            "response_time": "Response Time (hours)",
+                            "satisfaction": "Customer NPS (%)"
+                        }[x],
+                        key='unified_metric_selector'
+                    )
+                with col2:
+                    dist_asp = st.selectbox("Select ASP", st.session_state.bayesian_scores['asp_id'].tolist(), key='dist_asp')
+        
+                # Show full distribution for selected ASP and metric
+                st.plotly_chart(
+                    plot_posterior_distributions(st.session_state.scorer, dist_asp, metric_choice),
+                    use_container_width=True
+                )
+        
+                # Detailed metrics comparison across all ASPs
+                st.subheader("Detailed Metric Analysis Across All ASPs")
+                st.caption("📤 **OUTPUT**: Compare the selected metric across all ASPs with uncertainty intervals.")
+        
+                st.plotly_chart(
+                    plot_metric_distributions(st.session_state.bayesian_scores, metric_choice),
+                    use_container_width=True
+                )
+        
+                # Continuous Learning Simulator (BEFORE scores so updates are reflected)
+                st.markdown("---")
+                st.subheader("🔄 Continuous Learning Simulator")
+                st.info("**Bayesian Value #3**: Watch how posteriors update as new data arrives. Add a task and see how ALL scores, rankings, and recommendations update instantly.")
+        
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    sim_asp = st.selectbox("Select ASP", st.session_state.bayesian_scores['asp_id'].tolist(), key='sim_asp')
+                with col2:
+                    sim_success = st.selectbox("Task Success?", [True, False], format_func=lambda x: "✅ Success" if x else "❌ Failure")
+                with col3:
+                    sim_response = st.number_input("Response Time (hours)", min_value=0.5, max_value=24.0, value=4.0, step=0.5)
+                with col4:
+                    sim_satisfaction = st.slider("Satisfaction (0-10)", 0.0, 10.0, 7.0, 0.5)
+        
+                if sim_asp:
+                    current_asp_data = st.session_state.bayesian_scores[st.session_state.bayesian_scores['asp_id'] == sim_asp].iloc[0]
+                    current_task_count = len(st.session_state.historical_data[st.session_state.historical_data['asp_id'] == sim_asp])
+                    st.markdown(f"""
+                    **📊 Current State for {sim_asp}:** Tasks: **{current_task_count}** | Score: **{current_asp_data['score']:.3f}** ± {current_asp_data['uncertainty']:.3f} | Success: **{current_asp_data['success_rate_mean']:.1%}** | Response: **{current_asp_data['response_time_mean']:.1f}h** | Satisfaction: **{current_asp_data['satisfaction_mean']:.1f}%**
+                    """)
+                    with st.expander(f"📋 View ALL Historical Tasks for {sim_asp} ({current_task_count} tasks)"):
+                        asp_tasks = st.session_state.historical_data[st.session_state.historical_data['asp_id'] == sim_asp].copy()
+                        asp_tasks = asp_tasks[['task_id', 'asp_id', 'complexity', 'success', 'response_time_hours', 'customer_satisfaction', 'sla_met']]
+                        st.dataframe(asp_tasks, use_container_width=True, hide_index=True)
+        
+                if st.button("➕ Add New Task & Update Posterior", type="primary"):
+                    new_task = pd.DataFrame([{
+                        'asp_id': sim_asp,
+                        'task_id': f"{sim_asp}_NEW_{len(st.session_state.historical_data)}",
+                        'complexity': 'Medium',
+                        'success': sim_success,
+                        'response_time_hours': sim_response,
+                        'cost': 1500.0,
+                        'customer_satisfaction': sim_satisfaction,
+                        'sla_met': sim_response < 24 and sim_success
+                    }])
+                    st.session_state.historical_data = pd.concat([st.session_state.historical_data, new_task], ignore_index=True)
+            
+                    with st.spinner("Updating posterior with new evidence..."):
+                        scorer = BayesianASPScorer()
+                        scorer.fit(st.session_state.historical_data, n_samples=500)
+                        st.session_state.bayesian_scores = scorer.score_asps(weights)
+                        st.session_state.scorer = scorer
+            
+                    st.rerun()
+        
+                st.markdown("---")
+        
+                # Scores table
+                st.subheader("ASP Scores Table (OUTPUT: Summary Statistics)")
+                st.caption("📤 **OUTPUT**: Posterior means and 95% credible intervals for all metrics.")
+        
+                display_df = st.session_state.bayesian_scores.copy()
+                display_df = display_df.rename(columns={
+                    'success_rate_mean': 'Success Rate (probability)',
+                    'response_time_mean': 'Response Time (hours)',
+                    'satisfaction_mean': 'NPS (%)'
+                })
+                display_df['success_rate_ci'] = display_df['success_rate_ci'].apply(lambda x: f"[{x[0]:.3f}, {x[1]:.3f}]")
+                display_df['response_time_ci'] = display_df['response_time_ci'].apply(lambda x: f"[{x[0]:.3f}h, {x[1]:.3f}h]")
+                display_df['satisfaction_ci'] = display_df['satisfaction_ci'].apply(lambda x: f"[{x[0]:.1f}%, {x[1]:.1f}%]")
+                display_cols = ['asp_id', 'score', 'uncertainty', 
+                               'Success Rate (probability)', 'success_rate_ci',
+                               'Response Time (hours)', 'response_time_ci',
+                               'NPS (%)', 'satisfaction_ci']
+                st.dataframe(
+                    display_df[display_cols].style.background_gradient(subset=['score'], cmap='RdYlGn'),
+                    use_container_width=True
+                )
+        
+                # Recommendation
+                best_asp = st.session_state.bayesian_scores.iloc[0]
+                asp_profile = st.session_state.asp_profiles[st.session_state.asp_profiles['asp_id']==best_asp['asp_id']]
+                specialization = asp_profile['specialization'].values[0] if 'specialization' in asp_profile.columns else 'general work'
+                st.success(f"""
+                **🏆 Recommended ASP: {best_asp['asp_id']}** ({specialization})
+                - Score: {best_asp['score']:.3f} ± {best_asp['uncertainty']:.3f}
+                - Success Rate: {best_asp['success_rate_mean']:.1%}
+                - Avg Response Time: {best_asp['response_time_mean']:.1f} hours
+                - Customer Satisfaction: {best_asp['satisfaction_mean']:.1f}%
+                """)
+        
+                # Key Business Decisions powered by Bayesian Analytics
+                worst_asp = st.session_state.bayesian_scores.iloc[-1]
+                scores = st.session_state.bayesian_scores
+                with st.expander("💼 Key Business Decisions (Bayesian Value for Stakeholders)", expanded=True):
+                    st.markdown(f"""
+        **What Bayesian Analytics enables that simple averages cannot:**
+
+        | # | Decision | Bayesian Insight | Business Impact |
+        |:--|:---------|:-----------------|:----------------|
+        | 1 | **Best ASP selection** | {best_asp['asp_id']} scores {best_asp['score']:.3f} with {best_asp['score_ci'][0]:.3f}–{best_asp['score_ci'][1]:.3f} range | Even worst-case outperforms alternatives |
+        | 2 | **Avoid worst performer** | {worst_asp['asp_id']} scores {worst_asp['score']:.3f} — {((best_asp['score']-worst_asp['score'])/worst_asp['score']*100):.0f}% below best | Quantified risk of wrong choice |
+        | 3 | **Confidence in decision** | {best_asp['asp_id']} uncertainty ±{best_asp['uncertainty']:.3f} vs {worst_asp['asp_id']} ±{worst_asp['uncertainty']:.3f} | More data = narrower CI = safer decisions |
+        | 4 | **Data collection priority** | {scores.loc[scores['uncertainty'].idxmax(), 'asp_id']} has highest uncertainty (±{scores['uncertainty'].max():.3f}) | Invest in data where it matters most |
+        | 5 | **Per-category winners** | Mountain: {scores[scores['asp_id'].str.contains('Mount')].iloc[0]['asp_id']}, Urban: {scores[scores['asp_id'].str.contains('Std')].iloc[0]['asp_id']}, Climbing: {scores[scores['asp_id'].str.contains('Climb')].iloc[0]['asp_id']} | Right ASP for right task type |
+
+        **🎯 Bottom line**: Bayesian analytics doesn't just tell you *who is best* — it tells you **how confident** you should be in that choice, and **what could go wrong** (floor scores). This turns ASP selection from gut feeling into data-driven risk management.
+                    """)
+        
+                # Helper: CI-based risk analysis for a pair of ASPs
+                def ci_risk_analysis(w, r):
+                    if r is None:
+                        return ""
+                    overlaps = []
+                    if r['success_rate_ci'][1] > w['success_rate_ci'][0]:
+                        overlaps.append(f"Success Rate: {r['asp_id']} best ({r['success_rate_ci'][1]:.1%}) > {w['asp_id']} worst ({w['success_rate_ci'][0]:.1%})")
+                    if r['response_time_ci'][0] < w['response_time_ci'][1]:
+                        overlaps.append(f"Response Time: {r['asp_id']} best ({r['response_time_ci'][0]:.1f}h) < {w['asp_id']} worst ({w['response_time_ci'][1]:.1f}h)")
+                    if r['satisfaction_ci'][1] > w['satisfaction_ci'][0]:
+                        overlaps.append(f"Satisfaction: {r['asp_id']} best ({r['satisfaction_ci'][1]:.1f}%) > {w['asp_id']} worst ({w['satisfaction_ci'][0]:.1f}%)")
+                    if overlaps:
+                        overlap_list = "\n".join([f"  - {o}" for o in overlaps])
+                        w_floor_winner = w['asp_id'] if w['score_ci'][0] > r['score_ci'][0] else r['asp_id']
+                        return f"""
+        ⚠️ **CI Overlap on {len(overlaps)} metric(s)** — runner-up could outperform:
+
+        {overlap_list}
+
+        | Perspective | {w['asp_id']} | {r['asp_id']} | Choose |
+        |:--|:--:|:--:|:--|
+        | 🔻 Floor | {w['score_ci'][0]:.3f} | {r['score_ci'][0]:.3f} | **{w_floor_winner}** |
+        | ⚖️ Mean | {w['score']:.3f} | {r['score']:.3f} | **{w['asp_id']}** |
+        | 🔺 Ceiling | {w['score_ci'][1]:.3f} | {r['score_ci'][1]:.3f} | **{w['asp_id'] if w['score_ci'][1] > r['score_ci'][1] else r['asp_id']}** |"""
+                    else:
+                        return f"""
+        ✅ **No CI overlap** — {w['asp_id']} outperforms {r['asp_id']} even in worst-case.
+
+        | Perspective | {w['asp_id']} | {r['asp_id']} |
+        |:--|:--:|:--:|
+        | 🔻 Floor | {w['score_ci'][0]:.3f} | {r['score_ci'][0]:.3f} |
+        | ⚖️ Mean | {w['score']:.3f} | {r['score']:.3f} |
+        | 🔺 Ceiling | {w['score_ci'][1]:.3f} | {r['score_ci'][1]:.3f} |"""
+        
+                # Helper: render category analysis as comparison table
+                def render_category(cat_asps, cat_name, task_type, cpp=100000):
+                    if len(cat_asps) < 2:
+                        return
+                    w = cat_asps.iloc[0]
+                    r = cat_asps.iloc[1]
+            
+                    # Probability of Superiority
+                    samples_w = st.session_state.scorer.get_score_samples(w['asp_id'], weights)
+                    samples_r = st.session_state.scorer.get_score_samples(r['asp_id'], weights)
+                    pos_pct = (samples_w > samples_r).mean() * 100
+            
+                    # Compute shared x-range for all 3 plots
+                    all_samples = np.concatenate([samples_w, samples_r])
+                    x_min = max(0, np.percentile(all_samples, 0.5) - 0.05)
+                    x_max = np.percentile(all_samples, 99.5) + 0.05
+                    x_range = [x_min, x_max]
+            
+                    st.plotly_chart(
+                        plot_pos_comparison(samples_w, samples_r, w['asp_id'], r['asp_id'], pos_pct, x_range),
+                        use_container_width=True
+                    )
+            
+                    ci_fig, ci_w, ci_r, ci_overlap = plot_credible_interval(samples_w, samples_r, w['asp_id'], r['asp_id'], x_range)
+                    st.plotly_chart(ci_fig, use_container_width=True)
+            
+                    el_fig, el_w, el_r = plot_expected_loss(samples_w, samples_r, w['asp_id'], r['asp_id'], x_range, cpp)
+                    st.plotly_chart(el_fig, use_container_width=True)
+            
+                    n_w = len(st.session_state.historical_data[st.session_state.historical_data['asp_id'] == w['asp_id']])
+                    n_r = len(st.session_state.historical_data[st.session_state.historical_data['asp_id'] == r['asp_id']])
+                    safer = w['asp_id'] if el_w < el_r else r['asp_id']
+            
+                    # 2d: Hide metrics table and CI overlap in expander
+                    with st.expander("📋 Detailed Metrics & CI Overlap Analysis"):
+                        # Build comparison table
+                        def fmt_ci(ci):
+                            return f"[{ci[0]:.3f}, {ci[1]:.3f}]"
+                        def fmt_ci_pct(ci):
+                            return f"[{ci[0]:.1%}, {ci[1]:.1%}]"
+                
+                        table_data = {
+                            'Metric': ['Tasks', 'Overall Score', 'Success Rate ↑', 'Response Time (h) ↓', 'NPS (%) ↑'],
+                            f"🥇 {w['asp_id']}": [
+                                f"{n_w}",
+                                f"{w['score']:.3f} ± {w['uncertainty']:.3f}",
+                                f"{w['success_rate_mean']:.1%} {fmt_ci_pct(w['success_rate_ci'])}",
+                                f"{w['response_time_mean']:.1f} {fmt_ci(w['response_time_ci'])}",
+                                f"{w['satisfaction_mean']:.1f}% {fmt_ci(w['satisfaction_ci'])}"
+                            ],
+                            f"🥈 {r['asp_id']}": [
+                                f"{n_r}",
+                                f"{r['score']:.3f} ± {r['uncertainty']:.3f}",
+                                f"{r['success_rate_mean']:.1%} {fmt_ci_pct(r['success_rate_ci'])}",
+                                f"{r['response_time_mean']:.1f} {fmt_ci(r['response_time_ci'])}",
+                                f"{r['satisfaction_mean']:.1f}% {fmt_ci(r['satisfaction_ci'])}"
+                            ],
+                            'Winner': [
+                                f"{w['asp_id'] if n_w > n_r else r['asp_id']} (more data)",
+                                f"{w['asp_id']} (+{w['score']-r['score']:.3f})",
+                                f"{w['asp_id'] if w['success_rate_mean'] > r['success_rate_mean'] else r['asp_id']} (higher ↑)",
+                                f"{w['asp_id'] if w['response_time_mean'] < r['response_time_mean'] else r['asp_id']} (lower ↓)",
+                                f"{w['asp_id'] if w['satisfaction_mean'] > r['satisfaction_mean'] else r['asp_id']} (higher ↑)"
+                            ]
+                        }
+                        st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
+                
+                        # 2c: CI overlap analysis (no recommendation, no "collect more data")
+                        st.markdown(ci_risk_analysis(w, r))
+            
+                    # Business Value Summary Table with medals
+                    st.markdown(f"#### 📊 Quantified Business Value: {w['asp_id']} vs {r['asp_id']}")
+            
+                    # 4: CI verdict with justification
+                    if ci_overlap:
+                        ci_w_width = ci_w[1] - ci_w[0]
+                        ci_r_width = ci_r[1] - ci_r[0]
+                        wider = r['asp_id'] if ci_r_width > ci_w_width else w['asp_id']
+                        wider_n = n_r if ci_r_width > ci_w_width else n_w
+                        # Estimate: to halve CI width, need ~4x more data
+                        needed = wider_n * 3
+                        ci_verdict = f"⚠️ Overlap — {wider} needs ~{needed} tasks (currently {wider_n}) to narrow CI"
+                    else:
+                        ci_verdict = "✅ No overlap — clear winner"
+            
+                    def fmt_dollar(v):
+                        return f"${v:,.2f}".replace(",", " ").replace(".", ",").replace(" ", ".")
+            
+                    bv_data = {
+                        'Metric': [
+                            '🎯 Probability of Superiority',
+                            '📏 95% Credible Interval',
+                            '🛡️ Expected Loss',
+                            '💰 Expected Loss ($)'
+                        ],
+                        f"🥇 {w['asp_id']}": [
+                            f"Wins {pos_pct:.0f}% of samples",
+                            f"[{ci_w[0]:.3f}, {ci_w[1]:.3f}]",
+                            f"E(Loss) = {el_w:.3f}",
+                            fmt_dollar(el_w * cpp)
+                        ],
+                        f"🥈 {r['asp_id']}": [
+                            f"Wins {100-pos_pct:.0f}% of samples",
+                            f"[{ci_r[0]:.3f}, {ci_r[1]:.3f}]",
+                            f"E(Loss) = {el_r:.3f}",
+                            fmt_dollar(el_r * cpp)
+                        ],
+                        'Verdict': [
+                            f"{'🟢' if pos_pct >= 75 else '🟡' if pos_pct >= 60 else '🔴'} {w['asp_id'] if pos_pct > 50 else r['asp_id']} is superior",
+                            ci_verdict,
+                            f"🛡️ {safer} is the safer choice",
+                            f"💰 Choosing {safer} saves {fmt_dollar(abs(el_r - el_w) * cpp)} per single ASP task"
+                        ]
+                    }
+                    st.dataframe(pd.DataFrame(bv_data), use_container_width=True, hide_index=True)
+            
+                    if pos_pct >= 90:
+                        conf_label = "🟢 Very High Confidence"
+                    elif pos_pct >= 75:
+                        conf_label = "🟡 Moderate Confidence"
+                    elif pos_pct >= 60:
+                        conf_label = "🟠 Low Confidence"
+                    else:
+                        conf_label = "🔴 Very Low Confidence"
+                    st.markdown(f"**Recommendation**: For {task_type}, choose **{w['asp_id']}** — {conf_label} (PoS: {pos_pct:.0f}%)")
+        
+                # Insights
+                with st.expander("💡 Key Insights (Dynamic - Based on Current Results)"):
+                    top_asp = st.session_state.bayesian_scores.iloc[0]
+            
+                    def get_specialization(asp_id):
+                        asp_prof = st.session_state.asp_profiles[st.session_state.asp_profiles['asp_id']==asp_id]
+                        return asp_prof['specialization'].values[0] if 'specialization' in asp_prof.columns else 'N/A'
+            
+                    mountain_asps = st.session_state.bayesian_scores[st.session_state.bayesian_scores['asp_id'].str.contains('Mount')].sort_values('score', ascending=False)
+                    std_asps = st.session_state.bayesian_scores[st.session_state.bayesian_scores['asp_id'].str.contains('Std')].sort_values('score', ascending=False)
+                    climb_asps = st.session_state.bayesian_scores[st.session_state.bayesian_scores['asp_id'].str.contains('Climb')].sort_values('score', ascending=False)
+            
+                    st.markdown(f"""
+                    **Bayesian Analytics Results Summary:**
+            
+                    **1. Current Model Configuration (Hyperparameters):**
+                    - Success Rate Weight: **{weights['success_rate']:.1%}** - {"🔴 High priority" if weights['success_rate'] > 0.4 else "🟡 Moderate priority" if weights['success_rate'] > 0.2 else "⚪ Low priority"}
+                    - Response Time Weight: **{weights['response_time']:.1%}** - {"🔴 High priority" if weights['response_time'] > 0.4 else "🟡 Moderate priority" if weights['response_time'] > 0.2 else "⚪ Low priority"}
+                    - Customer Satisfaction Weight: **{weights['satisfaction']:.1%}** - {"🔴 High priority" if weights['satisfaction'] > 0.4 else "🟡 Moderate priority" if weights['satisfaction'] > 0.2 else "⚪ Low priority"}
+            
+                    **2. Score Formula & Risk Bounds:**
+            
+                    `Score = SuccessRate × {weights['success_rate']:.0%} + ResponseNorm × {weights['response_time']:.0%} + Satisfaction/10 × {weights['satisfaction']:.0%}`
+            
+                    where `ResponseNorm = 1/(1 + hours/10)` (lower time → higher score)
+            
+                    Each score has three values derived from the 95% credible intervals:
+                    - 🔻 **Floor (worst-case)** = score using lower CI bounds for success & satisfaction, upper CI for response time
+                    - ⚖️ **Mean** = score using posterior means
+                    - 🔺 **Ceiling (best-case)** = score using upper CI bounds for success & satisfaction, lower CI for response time
+                    """)
+            
+                    st.markdown("---")
+                    st.markdown("### 🏔️ Mountain Operations Analysis")
+                    render_category(mountain_asps, "Mountain", "mountain terrain tasks", cost_per_point)
+            
+                    st.markdown("---")
+                    st.markdown("### 🏙️ Standard Urban Tasks Analysis")
+                    render_category(std_asps, "Standard", "standard urban tasks", cost_per_point)
+            
+                    st.markdown("---")
+                    st.markdown("### 🧗 High-Risk Climbing Analysis")
+                    render_category(climb_asps, "Climbing", "high-risk climbing tasks", cost_per_point)
 
 else:
     st.info("🚧 This module is under development. Stay tuned!")
